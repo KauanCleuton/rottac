@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(npx create-next-app@latest frontend --typescript --tailwind=false --eslint --app --src-dir --import-alias \"@/*\" --use-npm)",
+      "Bash(ls C:/Users/cleut/Desktop/aprova-ai/*.md)",
+      "Bash(npx prisma:*)",
+      "Bash(rm:*)",
+      "Bash(npx next:*)",
+      "Bash(ls:*)",
+      "Bash([ ! -d \"/c/Users/cleut/Desktop/aprova-ai/frontend/src/app/\\(app\\)/$page\" ])"
+    ]
+  }
+}

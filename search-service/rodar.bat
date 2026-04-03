@@ -1,0 +1,6 @@
+@echo off
+echo Instalando dependencias...
+pip install -r requirements.txt
+echo.
+echo Iniciando Aprova.AI Search Service na porta 3003...
+python main.py

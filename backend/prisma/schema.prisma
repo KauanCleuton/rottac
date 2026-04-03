@@ -1,0 +1,824 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USUÁRIO ───────────────────────────────────────────────────────────────
+
+model User {
+  id                String    @id @default(uuid())
+  name              String
+  email             String    @unique
+  password          String
+  avatar            String?
+  experienceLevel   ExperienceLevel @default(INICIANTE)
+  learningStyle     LearningStyle   @default(LEITURA)
+  dailyStudyHours   Float     @default(2)
+  examDate          DateTime?
+  examName          String?
+  targetRole        String?
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relações
+  routines              Routine[]
+  subjects              Subject[]
+  studyPlans            StudyPlan[]
+  studySessions         StudySession[]
+  goals                 Goal[]
+  flashcards            Flashcard[]
+  notes                 Note[]
+  mindMaps              MindMap[]
+  errorNotebook         ErrorEntry[]
+  questionLogs          QuestionLog[]
+  habits                Habit[]
+  gamification          Gamification?
+  notifications         Notification[]
+  pdfs                  PDF[]
+  focusSessions         FocusSession[]
+  emotionLogs           EmotionLog[]
+  // Inteligência adaptativa
+  brainProfile          BrainProfile?
+  behaviorEvents        BehaviorEvent[]
+  energyLogs            EnergyLog[]
+  dailyPlans            DailyIntelligencePlan[]
+  missions              Mission[]
+  bruteForce            BruteForceSession[]
+  procrastinationEvents ProcrastinationEvent[]
+  analysisInsights      AnalysisInsight[]
+
+  @@map("users")
+}
+
+enum ExperienceLevel {
+  INICIANTE
+  INTERMEDIARIO
+  AVANCADO
+}
+
+enum LearningStyle {
+  VISUAL
+  LEITURA
+  PRATICA
+  AUDITIVO
+}
+
+// ─── ROTINA ────────────────────────────────────────────────────────────────
+
+model Routine {
+  id          String    @id @default(uuid())
+  userId      String
+  dayOfWeek   Int       // 0=Domingo ... 6=Sábado
+  startTime   String    // "08:00"
+  endTime     String    // "12:00"
+  type        RoutineType
+  label       String?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("routines")
+}
+
+enum RoutineType {
+  ESTUDO
+  TRABALHO
+  LIVRE
+  SONO
+}
+
+// ─── DISCIPLINAS ───────────────────────────────────────────────────────────
+
+model Subject {
+  id          String    @id @default(uuid())
+  userId      String
+  name        String
+  color       String    @default("#1976d2")
+  icon        String?
+  weight      Float     @default(1.0)   // Peso/prioridade no cronograma
+  totalTopics Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modules     Module[]
+  errorEntries ErrorEntry[]
+  questionLogs QuestionLog[]
+  pdfs        PDF[]
+  flashcards  Flashcard[]
+
+  @@map("subjects")
+}
+
+model Module {
+  id          String    @id @default(uuid())
+  subjectId   String
+  name        String
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topics      Topic[]
+
+  @@map("modules")
+}
+
+model Topic {
+  id              String    @id @default(uuid())
+  moduleId        String
+  name            String
+  order           Int       @default(0)
+  difficulty      Difficulty @default(MEDIO)
+  estimatedHours  Float     @default(1)
+  progress        Float     @default(0)   // 0-100%
+  isCompleted     Boolean   @default(false)
+  lastStudiedAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  module          Module    @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  studyTasks      StudyTask[]
+  errorEntries    ErrorEntry[]
+  flashcards      Flashcard[]
+  questionLogs    QuestionLog[]
+  pdfs            PDF[]
+  notes           Note[]
+
+  @@map("topics")
+}
+
+enum Difficulty {
+  FACIL
+  MEDIO
+  DIFICIL
+}
+
+// ─── PLANO DE ESTUDOS ──────────────────────────────────────────────────────
+
+model StudyPlan {
+  id          String    @id @default(uuid())
+  userId      String
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean   @default(true)
+  status      PlanStatus @default(ATIVO)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       StudyTask[]
+
+  @@map("study_plans")
+}
+
+enum PlanStatus {
+  ATIVO
+  PAUSADO
+  CONCLUIDO
+  ATRASADO
+}
+
+model StudyTask {
+  id              String    @id @default(uuid())
+  studyPlanId     String
+  topicId         String?
+  title           String
+  description     String?
+  scheduledDate   DateTime
+  estimatedMinutes Int      @default(60)
+  actualMinutes   Int?
+  isCompleted     Boolean   @default(false)
+  completedAt     DateTime?
+  order           Int       @default(0)
+  type            TaskType  @default(LEITURA)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  studyPlan       StudyPlan @relation(fields: [studyPlanId], references: [id], onDelete: Cascade)
+  topic           Topic?    @relation(fields: [topicId], references: [id])
+  focusSessions   FocusSession[]
+
+  @@map("study_tasks")
+}
+
+enum TaskType {
+  LEITURA
+  REVISAO
+  EXERCICIOS
+  VIDEO
+  RESUMO
+  FLASHCARDS
+  SIMULADO
+}
+
+// ─── SESSÃO DE ESTUDOS ─────────────────────────────────────────────────────
+
+model StudySession {
+  id          String    @id @default(uuid())
+  userId      String
+  date        DateTime
+  totalMinutes Int
+  notes       String?
+  mood        Int?      // 1-5
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("study_sessions")
+}
+
+// ─── MODO FOCO (POMODORO) ──────────────────────────────────────────────────
+
+model FocusSession {
+  id              String    @id @default(uuid())
+  userId          String
+  studyTaskId     String?
+  technique       FocusTechnique @default(POMODORO)
+  workMinutes     Int       @default(25)
+  breakMinutes    Int       @default(5)
+  cycles          Int       @default(0)
+  totalMinutes    Int       @default(0)
+  status          FocusStatus @default(ATIVO)
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studyTask       StudyTask? @relation(fields: [studyTaskId], references: [id])
+
+  @@map("focus_sessions")
+}
+
+enum FocusTechnique {
+  POMODORO
+  FLOWTIME
+  CINQUENTA_DEZ
+  NOVENTA_VINTE
+}
+
+enum FocusStatus {
+  ATIVO
+  PAUSADO
+  CONCLUIDO
+  CANCELADO
+}
+
+// ─── METAS ─────────────────────────────────────────────────────────────────
+
+model Goal {
+  id          String    @id @default(uuid())
+  userId      String
+  title       String
+  type        GoalType
+  period      GoalPeriod
+  target      Float
+  current     Float     @default(0)
+  unit        String    // "horas", "questões", "tópicos"
+  startDate   DateTime
+  endDate     DateTime
+  isCompleted Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("goals")
+}
+
+enum GoalType {
+  TEMPO
+  QUESTOES
+  TOPICOS
+  REVISOES
+}
+
+enum GoalPeriod {
+  DIARIO
+  SEMANAL
+  MENSAL
+}
+
+// ─── FLASHCARDS ────────────────────────────────────────────────────────────
+
+model Flashcard {
+  id              String    @id @default(uuid())
+  userId          String
+  subjectId       String?
+  topicId         String?
+  front           String    @db.Text
+  back            String    @db.Text
+  difficulty      Difficulty @default(MEDIO)
+  nextReviewAt    DateTime  @default(now())
+  interval        Int       @default(1)      // dias até próxima revisão
+  easeFactor      Float     @default(2.5)    // fator SM-2
+  repetitions     Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject         Subject?  @relation(fields: [subjectId], references: [id])
+  topic           Topic?    @relation(fields: [topicId], references: [id])
+  reviews         FlashcardReview[]
+
+  @@map("flashcards")
+}
+
+model FlashcardReview {
+  id          String    @id @default(uuid())
+  flashcardId String
+  rating      Int       // 0=Errou, 1=Difícil, 2=Ok, 3=Fácil
+  reviewedAt  DateTime  @default(now())
+
+  flashcard   Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+
+  @@map("flashcard_reviews")
+}
+
+// ─── ANOTAÇÕES ─────────────────────────────────────────────────────────────
+
+model Note {
+  id          String    @id @default(uuid())
+  userId      String
+  topicId     String?
+  title       String
+  content     String    @db.LongText
+  tags        String?   // JSON array
+  isPinned    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic       Topic?    @relation(fields: [topicId], references: [id])
+
+  @@map("notes")
+}
+
+// ─── MAPAS MENTAIS ─────────────────────────────────────────────────────────
+
+model MindMap {
+  id          String    @id @default(uuid())
+  userId      String
+  title       String
+  data        Json      // estrutura de nós do mapa mental
+  thumbnail   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mind_maps")
+}
+
+// ─── PDFs ──────────────────────────────────────────────────────────────────
+
+model PDF {
+  id          String    @id @default(uuid())
+  userId      String
+  subjectId   String?
+  topicId     String?
+  title       String
+  filename    String
+  path        String
+  size        Int
+  pageCount   Int?
+  currentPage Int       @default(1)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     Subject?  @relation(fields: [subjectId], references: [id])
+  topic       Topic?    @relation(fields: [topicId], references: [id])
+
+  @@map("pdfs")
+}
+
+// ─── CADERNO DE ERROS ──────────────────────────────────────────────────────
+
+model ErrorEntry {
+  id              String    @id @default(uuid())
+  userId          String
+  subjectId       String
+  topicId         String?
+  questionText    String?   @db.Text
+  description     String    @db.Text
+  correctAnswer   String    @db.Text
+  personalNotes   String?   @db.Text
+  errorType       ErrorType
+  difficulty      Difficulty @default(MEDIO)
+  imageUrl        String?
+  audioUrl        String?
+  audioTranscription String? @db.Text
+  nextReviewAt    DateTime  @default(now())
+  reviewCount     Int       @default(0)
+  isResolved      Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject         Subject   @relation(fields: [subjectId], references: [id])
+  topic           Topic?    @relation(fields: [topicId], references: [id])
+  reviews         ErrorReview[]
+
+  @@map("error_entries")
+}
+
+model ErrorReview {
+  id            String    @id @default(uuid())
+  errorEntryId  String
+  result        ReviewResult
+  reviewedAt    DateTime  @default(now())
+
+  errorEntry    ErrorEntry @relation(fields: [errorEntryId], references: [id], onDelete: Cascade)
+
+  @@map("error_reviews")
+}
+
+enum ErrorType {
+  FALTA_ATENCAO
+  CONTEUDO_NAO_ESTUDADO
+  INTERPRETACAO
+  ESQUECIMENTO
+}
+
+enum ReviewResult {
+  ACERTOU
+  ERROU_NOVAMENTE
+  PARCIALMENTE
+}
+
+// ─── QUESTÕES ──────────────────────────────────────────────────────────────
+
+model QuestionLog {
+  id          String    @id @default(uuid())
+  userId      String
+  subjectId   String
+  topicId     String?
+  source      String?   // banca, prova, ano
+  isCorrect   Boolean
+  timeSpent   Int?      // segundos
+  notes       String?
+  loggedAt    DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     Subject   @relation(fields: [subjectId], references: [id])
+  topic       Topic?    @relation(fields: [topicId], references: [id])
+
+  @@map("question_logs")
+}
+
+// ─── HÁBITOS ───────────────────────────────────────────────────────────────
+
+model Habit {
+  id          String    @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  frequency   HabitFrequency @default(DIARIO)
+  targetDays  String?   // JSON: [1,2,3,4,5] dias da semana
+  streak      Int       @default(0)
+  bestStreak  Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completions HabitCompletion[]
+
+  @@map("habits")
+}
+
+model HabitCompletion {
+  id          String    @id @default(uuid())
+  habitId     String
+  completedAt DateTime  @default(now())
+
+  habit       Habit     @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@map("habit_completions")
+}
+
+enum HabitFrequency {
+  DIARIO
+  SEMANAL
+}
+
+// ─── GAMIFICAÇÃO ───────────────────────────────────────────────────────────
+
+model Gamification {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  xp          Int       @default(0)
+  level       Int       @default(1)
+  streak      Int       @default(0)
+  bestStreak  Int       @default(0)
+  totalHours  Float     @default(0)
+  badges      String?   @db.Text  // JSON array de badges conquistados
+  lastStudyAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("gamification")
+}
+
+// ─── EMOÇÕES / ESTADO EMOCIONAL ────────────────────────────────────────────
+
+model EmotionLog {
+  id        String    @id @default(uuid())
+  userId    String
+  emotion   EmotionType
+  energy    Int       // 1-5
+  notes     String?
+  loggedAt  DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("emotion_logs")
+}
+
+enum EmotionType {
+  MOTIVADO
+  CANSADO
+  ANSIOSO
+  FOCADO
+  ESTRESSADO
+  TRANQUILO
+}
+
+// ─── NOTIFICAÇÕES ──────────────────────────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  type      NotificationType
+  isRead    Boolean   @default(false)
+  data      Json?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  LEMBRETE_ESTUDO
+  META_ATINGIDA
+  REVISAO_PENDENTE
+  STREAK_RISCO
+  SIMULADO
+  SISTEMA
+  INTELIGENCIA
+  PROCRASTINACAO
+  MISSAO
+  MODO_GUERRA
+  ENERGIA
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── SISTEMA DE INTELIGÊNCIA ADAPTATIVA ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+model BrainProfile {
+  id                  String       @id @default(uuid())
+  userId              String       @unique
+  energyPattern       Json         @default("{}")
+  peakHours           Json         @default("[]")
+  weakSubjects        Json         @default("[]")
+  strongSubjects      Json         @default("[]")
+  behaviorType        BehaviorType @default(INCONSISTENTE)
+  performanceScore    Float        @default(0)
+  retentionRate       Float        @default(0)
+  forgettingIndex     Float        @default(0.5)
+  consistencyScore    Float        @default(0)
+  activeMode          StudyMode    @default(NORMAL)
+  examDate            DateTime?
+  avgSessionMinutes   Float        @default(0)
+  abandonmentRate     Float        @default(0)
+  lastAnalyzedAt      DateTime?
+  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime     @default(now())
+
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("brain_profiles")
+}
+
+enum BehaviorType {
+  DISCIPLINADO
+  PROCRASTINADOR
+  ANSIOSO
+  INCONSISTENTE
+  GUERREIRO
+}
+
+enum StudyMode {
+  NORMAL
+  FORCA_BRUTA
+  MODO_GUERRA
+  RETORNO
+  CANSADO
+}
+
+model BehaviorEvent {
+  id          String            @id @default(uuid())
+  userId      String
+  type        BehaviorEventType
+  subjectId   String?
+  topicId     String?
+  metadata    Json              @default("{}")
+  occurredAt  DateTime          @default(now())
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([userId, occurredAt])
+  @@map("behavior_events")
+}
+
+enum BehaviorEventType {
+  TAREFA_INICIADA
+  TAREFA_CONCLUIDA
+  TAREFA_ABANDONADA
+  TAREFA_PULADA
+  SESSAO_INICIADA
+  SESSAO_ENCERRADA
+  INATIVIDADE_DETECTADA
+  QUESTAO_RESPONDIDA
+  FLASHCARD_REVISADO
+  SIMULADO_INICIADO
+  SIMULADO_CONCLUIDO
+  MODO_FOCO_INICIADO
+  FUGA_DETECTADA
+  RETORNO_APOS_AUSENCIA
+  BAIXO_DESEMPENHO
+  ALTO_DESEMPENHO
+  MISSAO_ACEITA
+  MISSAO_CONCLUIDA
+}
+
+model EnergyLog {
+  id          String    @id @default(uuid())
+  userId      String
+  level       Int
+  hour        Int
+  dayOfWeek   Int
+  taskType    TaskType?
+  performance Float?
+  loggedAt    DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, hour])
+  @@map("energy_logs")
+}
+
+model DailyIntelligencePlan {
+  id              String          @id @default(uuid())
+  userId          String
+  date            DateTime
+  plan            Json
+  replans         Json            @default("[]")
+  status          DailyPlanStatus @default(GERADO)
+  executionScore  Float?
+  dayMode         StudyMode       @default(NORMAL)
+  generatedAt     DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("daily_intelligence_plans")
+}
+
+enum DailyPlanStatus {
+  GERADO
+  EM_EXECUCAO
+  REPLANEJADO
+  CONCLUIDO
+  ABANDONADO
+}
+
+model Mission {
+  id              String        @id @default(uuid())
+  userId          String
+  title           String
+  description     String        @db.Text
+  type            MissionType
+  criteria        Json
+  xpReward        Int           @default(50)
+  badge           String?
+  progress        Json          @default("{}")
+  status          MissionStatus @default(ATIVA)
+  isAutoGenerated Boolean       @default(true)
+  expiresAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("missions")
+}
+
+enum MissionType {
+  FORCA_BRUTA
+  CONSISTENCIA
+  VELOCIDADE
+  REVISAO
+  SIMULADO_MISSAO
+  RECUPERACAO
+  MICRO_ACAO
+  DESAFIO_DIARIO
+  MODO_GUERRA
+}
+
+enum MissionStatus {
+  ATIVA
+  CONCLUIDA
+  EXPIRADA
+  RECUSADA
+}
+
+model BruteForceSession {
+  id              String    @id @default(uuid())
+  userId          String
+  subjectId       String
+  criticalTopics  Json
+  trigger         String
+  plannedDays     Int       @default(7)
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  isActive        Boolean   @default(true)
+  improvementRate Float?
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("brute_force_sessions")
+}
+
+model ProcrastinationEvent {
+  id                String              @id @default(uuid())
+  userId            String
+  type              ProcrastinationType
+  avoidedSubject    String?
+  avoidedTaskId     String?
+  inactivityMinutes Int?
+  systemAction      String?
+  detectedAt        DateTime            @default(now())
+  resolvedAt        DateTime?
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("procrastination_events")
+}
+
+enum ProcrastinationType {
+  INATIVIDADE_LONGA
+  FUGA_MATERIA_DIFICIL
+  LOOP_MATERIA_FACIL
+  ABANDONO_SESSAO
+  INICIO_TARDIO
+}
+
+model AnalysisInsight {
+  id          String          @id @default(uuid())
+  userId      String
+  type        InsightType
+  title       String
+  body        String          @db.Text
+  data        Json            @default("{}")
+  severity    InsightSeverity @default(INFO)
+  isRead      Boolean         @default(false)
+  action      String?
+  actionTaken Boolean         @default(false)
+  generatedAt DateTime        @default(now())
+  expiresAt   DateTime?
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("analysis_insights")
+}
+
+enum InsightType {
+  PADRAO_ERRO
+  HORARIO_PRODUTIVO
+  QUEDA_DESEMPENHO
+  ALTA_RETENCAO
+  RISCO_ABANDONO
+  FRAQUEZA_CRITICA
+  SUGESTAO_REVISAO
+  PROGRESSO_RAPIDO
+  EFICIENCIA_HORARIA
+}
+
+enum InsightSeverity {
+  INFO
+  AVISO
+  CRITICO
+  POSITIVO
+}
