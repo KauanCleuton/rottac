@@ -32,6 +32,9 @@ model User {
   studySessions         StudySession[]
   goals                 Goal[]
   flashcards            Flashcard[]
+  flashcardFolders      FlashcardFolder[]
+  questions             Question[]
+  questionAttempts      QuestionAttempt[]
   notes                 Note[]
   mindMaps              MindMap[]
   errorNotebook         ErrorEntry[]
@@ -51,6 +54,14 @@ model User {
   bruteForce            BruteForceSession[]
   procrastinationEvents ProcrastinationEvent[]
   analysisInsights      AnalysisInsight[]
+  // Mentoria
+  mentorProfile         Mentor?
+  studentMentorings     Mentoring[]    @relation("StudentMentorings")
+  sentMessages          MentoringMessage[] @relation("SentMessages")
+  // Edital
+  editalImports         EditalImport[]
+  // Desafio Diário
+  dailyChallenges       DailyChallenge[]
 
   @@map("users")
 }
@@ -111,6 +122,8 @@ model Subject {
   questionLogs QuestionLog[]
   pdfs        PDF[]
   flashcards  Flashcard[]
+  dailyChallenges DailyChallenge[]
+  questions   Question[]
 
   @@map("subjects")
 }
@@ -305,24 +318,45 @@ enum GoalPeriod {
 
 // ─── FLASHCARDS ────────────────────────────────────────────────────────────
 
+model FlashcardFolder {
+  id          String    @id @default(uuid())
+  userId      String
+  name        String
+  color       String    @default("#6C63FF")
+  icon        String    @default("folder")
+  parentId    String?
+  createdAt   DateTime  @default(now())
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent      FlashcardFolder? @relation("FolderTree", fields: [parentId], references: [id])
+  children    FlashcardFolder[] @relation("FolderTree")
+  flashcards  Flashcard[]
+
+  @@map("flashcard_folders")
+}
+
 model Flashcard {
   id              String    @id @default(uuid())
   userId          String
+  folderId        String?
   subjectId       String?
   topicId         String?
   front           String    @db.Text
   back            String    @db.Text
   difficulty      Difficulty @default(MEDIO)
   nextReviewAt    DateTime  @default(now())
-  interval        Int       @default(1)      // dias até próxima revisão
-  easeFactor      Float     @default(2.5)    // fator SM-2
+  interval        Int       @default(1)
+  easeFactor      Float     @default(2.5)
   repetitions     Int       @default(0)
+  totalReviews    Int       @default(0)
+  correctReviews  Int       @default(0)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject         Subject?  @relation(fields: [subjectId], references: [id])
-  topic           Topic?    @relation(fields: [topicId], references: [id])
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder          FlashcardFolder? @relation(fields: [folderId], references: [id])
+  subject         Subject?         @relation(fields: [subjectId], references: [id])
+  topic           Topic?           @relation(fields: [topicId], references: [id])
   reviews         FlashcardReview[]
 
   @@map("flashcards")
@@ -403,10 +437,14 @@ model ErrorEntry {
   userId          String
   subjectId       String
   topicId         String?
+  title           String?
   questionText    String?   @db.Text
   description     String    @db.Text
   correctAnswer   String    @db.Text
+  myAnswer        String?   @db.Text
+  explanation     String?   @db.Text
   personalNotes   String?   @db.Text
+  source          String?
   errorType       ErrorType
   difficulty      Difficulty @default(MEDIO)
   imageUrl        String?
@@ -451,6 +489,46 @@ enum ReviewResult {
 }
 
 // ─── QUESTÕES ──────────────────────────────────────────────────────────────
+
+model Question {
+  id          String    @id @default(uuid())
+  userId      String
+  subjectId   String?
+  statement   String    @db.Text
+  optionA     String    @db.Text
+  optionB     String    @db.Text
+  optionC     String    @db.Text
+  optionD     String    @db.Text
+  optionE     String?   @db.Text
+  answer      String    // "A"|"B"|"C"|"D"|"E"
+  explanation String?   @db.Text
+  banca       String?
+  year        Int?
+  source      String?   // nome do PDF/livro
+  difficulty  Difficulty @default(MEDIO)
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     Subject?  @relation(fields: [subjectId], references: [id])
+  attempts    QuestionAttempt[]
+
+  @@map("questions")
+}
+
+model QuestionAttempt {
+  id         String   @id @default(uuid())
+  questionId String
+  userId     String
+  selected   String   // letra escolhida
+  isCorrect  Boolean
+  timeSpent  Int?
+  createdAt  DateTime @default(now())
+
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("question_attempts")
+}
 
 model QuestionLog {
   id          String    @id @default(uuid())
@@ -821,4 +899,181 @@ enum InsightSeverity {
   AVISO
   CRITICO
   POSITIVO
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── SISTEMA DE MENTORIA HUMANA ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Mentor {
+  id            String     @id @default(uuid())
+  userId        String     @unique
+  bio           String?    @db.Text
+  specialties   Json       @default("[]")
+  rating        Float      @default(0)
+  totalStudents Int        @default(0)
+  totalSessions Int        @default(0)
+  isAvailable   Boolean    @default(true)
+  pricePerHour  Float?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mentorings    Mentoring[]
+
+  @@map("mentors")
+}
+
+model Mentoring {
+  id          String          @id @default(uuid())
+  studentId   String
+  mentorId    String
+  status      MentoringStatus @default(PENDENTE)
+  goals       Json            @default("[]")
+  notes       String?         @db.Text
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  student     User            @relation("StudentMentorings", fields: [studentId], references: [id], onDelete: Cascade)
+  mentor      Mentor          @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  sessions    MentoringSession[]
+  messages    MentoringMessage[]
+  plans       MentoringWeeklyPlan[]
+
+  @@map("mentorings")
+}
+
+enum MentoringStatus {
+  PENDENTE
+  ATIVA
+  PAUSADA
+  ENCERRADA
+  RECUSADA
+}
+
+model MentoringSession {
+  id           String        @id @default(uuid())
+  mentoringId  String
+  scheduledAt  DateTime
+  durationMin  Int           @default(60)
+  platform     String?
+  meetUrl      String?
+  status       SessionStatus @default(AGENDADA)
+  notes        String?       @db.Text
+  recordingUrl String?
+  createdAt    DateTime      @default(now())
+
+  mentoring    Mentoring     @relation(fields: [mentoringId], references: [id], onDelete: Cascade)
+
+  @@map("mentoring_sessions")
+}
+
+enum SessionStatus {
+  AGENDADA
+  REALIZADA
+  CANCELADA
+  FALTOU
+}
+
+model MentoringMessage {
+  id          String      @id @default(uuid())
+  mentoringId String
+  senderId    String
+  content     String      @db.Text
+  type        MessageType @default(TEXT)
+  fileUrl     String?
+  isRead      Boolean     @default(false)
+  sentAt      DateTime    @default(now())
+
+  mentoring   Mentoring   @relation(fields: [mentoringId], references: [id], onDelete: Cascade)
+  sender      User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([mentoringId, sentAt])
+  @@map("mentoring_messages")
+}
+
+enum MessageType {
+  TEXT
+  AUDIO
+  FILE
+  SYSTEM
+}
+
+model MentoringWeeklyPlan {
+  id          String    @id @default(uuid())
+  mentoringId String
+  weekNumber  Int
+  weekStart   DateTime
+  weekEnd     DateTime
+  goals       Json      @default("[]")
+  tasks       Json      @default("[]")
+  feedback    String?   @db.Text
+  score       Float?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  mentoring   Mentoring @relation(fields: [mentoringId], references: [id], onDelete: Cascade)
+
+  @@map("mentoring_weekly_plans")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── IMPORTAÇÃO DE EDITAL ───────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+model EditalImport {
+  id              String        @id @default(uuid())
+  userId          String
+  fileName        String
+  fileUrl         String?
+  contestName     String?
+  year            Int?
+  status          EditalStatus  @default(PROCESSANDO)
+  extractedData   Json          @default("{}")
+  confirmedData   Json?
+  errorMessage    String?
+  processedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("edital_imports")
+}
+
+enum EditalStatus {
+  PROCESSANDO
+  EXTRAIDO
+  AGUARDANDO_CONFIRMACAO
+  CONFIRMADO
+  ERRO
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── DESAFIO DIÁRIO ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+model DailyChallenge {
+  id            String      @id @default(uuid())
+  userId        String
+  subjectId     String?
+  question      String      @db.Text
+  options       Json        // ["A. ...", "B. ...", "C. ...", "D. ..."]
+  correctOption String      // "A", "B", "C" ou "D"
+  explanation   String?     @db.Text
+  difficulty    Difficulty  @default(MEDIO)
+  banca         String?
+  userAnswer    String?
+  isCorrect     Boolean?
+  answeredAt    DateTime?
+  timeSpent     Int?
+  createdAt     DateTime    @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject       Subject?    @relation(fields: [subjectId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("daily_challenges")
 }

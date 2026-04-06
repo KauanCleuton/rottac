@@ -5,6 +5,9 @@ const morgan = require('morgan');
 const path = require('path');
 require('dotenv').config();
 
+// BigInt não é serializável pelo JSON padrão — converte para Number globalmente
+BigInt.prototype.toJSON = function () { return Number(this); };
+
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const subjectRoutes = require('./routes/subject.routes');
@@ -26,6 +29,13 @@ const emotionRoutes = require('./routes/emotion.routes');
 const intelligenceRoutes = require('./routes/intelligence.routes');
 const behaviorRoutes = require('./routes/behavior.routes');
 const missionRoutes = require('./routes/mission.routes');
+const mentoringRoutes = require('./routes/mentoring.routes');
+const editalRoutes = require('./routes/edital.routes');
+const flashcardExtractRoutes = require('./routes/flashcardExtract.routes');
+const postSimuladoRoutes = require('./routes/postSimulado.routes');
+const dailyChallengeRoutes = require('./routes/dailyChallenge.routes');
+const flashcardFolderRoutes = require('./routes/flashcardFolder.routes');
+const questionExtractRoutes = require('./routes/questionExtract.routes');
 
 const { errorHandler } = require('./middlewares/errorHandler');
 
@@ -74,6 +84,13 @@ app.use(`${API}/emotions`, emotionRoutes);
 app.use(`${API}/intelligence`, intelligenceRoutes);
 app.use(`${API}/behavior`, behaviorRoutes);
 app.use(`${API}/missions`, missionRoutes);
+app.use(`${API}/mentoring`, mentoringRoutes);
+app.use(`${API}/edital`, editalRoutes);
+app.use(`${API}/flashcards/extract`, flashcardExtractRoutes);
+app.use(`${API}/post-simulado`, postSimuladoRoutes);
+app.use(`${API}/daily-challenge`, dailyChallengeRoutes);
+app.use(`${API}/flashcard-folders`, flashcardFolderRoutes);
+app.use(`${API}/question-extract`, questionExtractRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

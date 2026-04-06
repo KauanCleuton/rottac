@@ -104,6 +104,8 @@ const generateAutoSchedule = async (req, res, next) => {
   try {
     const { planId, startDate, endDate } = req.body;
 
+    if (!planId) return res.status(400).json({ success: false, message: 'Crie um plano primeiro.' });
+
     const [subjects, user] = await Promise.all([
       prisma.subject.findMany({
         where: { userId: req.user.id },
@@ -113,79 +115,104 @@ const generateAutoSchedule = async (req, res, next) => {
       prisma.user.findUnique({ where: { id: req.user.id }, include: { routines: true } }),
     ]);
 
-    const tasks = [];
-    const start = dayjs(startDate);
-    const end = dayjs(endDate);
-    let currentDate = start;
-    let topicQueue = [];
+    if (subjects.length === 0) {
+      return res.status(400).json({ success: false, message: 'Cadastre disciplinas antes de gerar o cronograma.' });
+    }
 
-    // Montar fila de tópicos priorizados por peso da disciplina
+    // ── Fila de itens a agendar ───────────────────────────────────────────
+    // Prioridade: tópicos cadastrados. Fallback: uma tarefa por disciplina.
+    const queue = [];
+
     for (const subject of subjects) {
-      for (const module of subject.modules) {
-        for (const topic of module.topics) {
-          topicQueue.push({
+      const allTopics = subject.modules.flatMap(m => m.topics);
+      if (allTopics.length > 0) {
+        for (const topic of allTopics) {
+          queue.push({
             topicId: topic.id,
-            title: `${subject.name} - ${topic.name}`,
-            estimatedMinutes: Math.round(topic.estimatedHours * 60),
-            subjectWeight: subject.weight,
+            title: `${subject.name} — ${topic.name}`,
+            estimatedMinutes: Math.max(30, Math.round((topic.estimatedHours || 1) * 60)),
           });
         }
+      } else {
+        // Disciplina sem tópicos: cria tarefa genérica de leitura
+        queue.push({
+          topicId: null,
+          title: `${subject.name} — Estudo`,
+          estimatedMinutes: Math.round((subject.weight || 1) * 60),
+        });
       }
     }
 
-    // Distribuir tópicos nos dias com estudo disponível
-    let topicIndex = 0;
-    while (currentDate.isBefore(end) || currentDate.isSame(end, 'day')) {
-      const dayOfWeek = currentDate.day();
-      const dayRoutines = user.routines.filter(
-        (r) => r.dayOfWeek === dayOfWeek && r.type === 'ESTUDO'
-      );
+    // ── Minutos disponíveis por dia ───────────────────────────────────────
+    // Se o usuário tiver rotinas de ESTUDO, usa elas; senão assume 120 min/dia
+    const routineByDay = {};
+    for (const r of user.routines || []) {
+      if (r.type !== 'ESTUDO') continue;
+      const [sh, sm] = r.startTime.split(':').map(Number);
+      const [eh, em] = r.endTime.split(':').map(Number);
+      routineByDay[r.dayOfWeek] = (routineByDay[r.dayOfWeek] || 0) + (eh * 60 + em) - (sh * 60 + sm);
+    }
+    const hasRoutines = Object.keys(routineByDay).length > 0;
+    const DEFAULT_DAILY_MINUTES = 120;
 
-      if (dayRoutines.length > 0 && topicIndex < topicQueue.length) {
-        let remainingMinutes = dayRoutines.reduce((acc, r) => {
-          const [sh, sm] = r.startTime.split(':').map(Number);
-          const [eh, em] = r.endTime.split(':').map(Number);
-          return acc + (eh * 60 + em) - (sh * 60 + sm);
-        }, 0);
+    // ── Distribuição nos dias ─────────────────────────────────────────────
+    const tasks = [];
+    const start = dayjs(startDate || dayjs().format('YYYY-MM-DD'));
+    const end = dayjs(endDate || dayjs().add(3, 'month').format('YYYY-MM-DD'));
+    let currentDate = start;
+    let qi = 0; // índice na fila
 
+    while ((currentDate.isBefore(end) || currentDate.isSame(end, 'day')) && qi < queue.length) {
+      const dow = currentDate.day();
+      let availableMinutes;
+
+      if (hasRoutines) {
+        availableMinutes = routineByDay[dow] || 0; // 0 = dia sem estudo na rotina
+      } else {
+        availableMinutes = dow === 0 ? 60 : DEFAULT_DAILY_MINUTES; // domingo menos
+      }
+
+      if (availableMinutes > 0) {
         let order = 0;
-        while (remainingMinutes > 0 && topicIndex < topicQueue.length) {
-          const topic = topicQueue[topicIndex];
-          const mins = Math.min(topic.estimatedMinutes, remainingMinutes);
+        while (availableMinutes > 0 && qi < queue.length) {
+          const item = queue[qi];
+          const mins = Math.min(item.estimatedMinutes, availableMinutes);
 
           tasks.push({
             studyPlanId: planId,
-            topicId: topic.topicId,
-            title: topic.title,
+            topicId: item.topicId,
+            title: item.title,
             scheduledDate: currentDate.toDate(),
             estimatedMinutes: mins,
             order: order++,
             type: 'LEITURA',
           });
 
-          remainingMinutes -= mins;
-          if (mins >= topic.estimatedMinutes) topicIndex++;
-          else {
-            topicQueue[topicIndex] = { ...topic, estimatedMinutes: topic.estimatedMinutes - mins };
+          availableMinutes -= mins;
+          if (mins >= item.estimatedMinutes) {
+            qi++;
+          } else {
+            queue[qi] = { ...item, estimatedMinutes: item.estimatedMinutes - mins };
           }
         }
 
-        // Adicionar revisão no final do dia
-        if (tasks.length > 0) {
-          tasks.push({
-            studyPlanId: planId,
-            topicId: null,
-            title: 'Revisão rápida do dia',
-            scheduledDate: currentDate.toDate(),
-            estimatedMinutes: 15,
-            order: order++,
-            type: 'REVISAO',
-          });
-        }
+        // Revisão rápida no final de cada dia com conteúdo
+        tasks.push({
+          studyPlanId: planId,
+          topicId: null,
+          title: 'Revisão rápida do dia',
+          scheduledDate: currentDate.toDate(),
+          estimatedMinutes: 15,
+          order: order++,
+          type: 'REVISAO',
+        });
       }
 
       currentDate = currentDate.add(1, 'day');
     }
+
+    // Apaga tarefas antigas do plano antes de criar as novas
+    await prisma.studyTask.deleteMany({ where: { studyPlanId: planId } });
 
     if (tasks.length > 0) {
       await prisma.studyTask.createMany({ data: tasks });
@@ -196,7 +223,7 @@ const generateAutoSchedule = async (req, res, next) => {
       include: { tasks: { orderBy: [{ scheduledDate: 'asc' }, { order: 'asc' }] } },
     });
 
-    return success(res, plan, `Cronograma gerado com ${tasks.length} tarefas`);
+    return success(res, plan, `Cronograma gerado com ${tasks.length} tarefas distribuídas até ${end.format('DD/MM/YYYY')}`);
   } catch (err) {
     next(err);
   }

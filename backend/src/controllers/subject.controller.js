@@ -73,6 +73,14 @@ const deleteSubject = async (req, res, next) => {
     });
     if (!subject) return notFound(res, 'Disciplina não encontrada');
 
+    // Remove registros filhos antes para evitar violação de FK
+    await prisma.flashcard.deleteMany({ where: { subjectId: id } });
+    await prisma.errorEntry.deleteMany({ where: { subjectId: id } });
+    await prisma.questionLog.deleteMany({ where: { subjectId: id } });
+    await prisma.behaviorEvent.deleteMany({ where: { subjectId: id } });
+    await prisma.pDF.deleteMany({ where: { subjectId: id } });
+    await prisma.topic.deleteMany({ where: { module: { subjectId: id } } });
+    await prisma.module.deleteMany({ where: { subjectId: id } });
     await prisma.subject.delete({ where: { id } });
     return success(res, null, 'Disciplina removida');
   } catch (err) {

@@ -48,12 +48,21 @@ const getStats = async (req, res, next) => {
     });
 
     const total = overall._count.id;
+
+    // $queryRaw retorna BigInt no MySQL — converte para Number
+    const bySubjectSafe = bySubject.map((row) => ({
+      ...row,
+      total: Number(row.total),
+      correct: Number(row.correct),
+      accuracy: Number(row.accuracy),
+    }));
+
     return success(res, {
       total,
       correct,
       incorrect: total - correct,
       accuracy: total > 0 ? Math.round((correct / total) * 100) : 0,
-      bySubject,
+      bySubject: bySubjectSafe,
     });
   } catch (err) {
     next(err);

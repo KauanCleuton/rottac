@@ -29,15 +29,16 @@ function sm2(easeFactor, interval, repetitions, rating) {
 
 const getFlashcards = async (req, res, next) => {
   try {
-    const { subjectId, topicId, dueOnly } = req.query;
+    const { subjectId, topicId, dueOnly, folderId } = req.query;
     const where = { userId: req.user.id };
     if (subjectId) where.subjectId = subjectId;
     if (topicId) where.topicId = topicId;
+    if (folderId) where.folderId = folderId;
     if (dueOnly === 'true') where.nextReviewAt = { lte: new Date() };
 
     const flashcards = await prisma.flashcard.findMany({
       where,
-      include: { subject: true, topic: true },
+      include: { subject: true, topic: true, folder: true },
       orderBy: { nextReviewAt: 'asc' },
     });
 
@@ -54,7 +55,7 @@ const getDueFlashcards = async (req, res, next) => {
         userId: req.user.id,
         nextReviewAt: { lte: new Date() },
       },
-      include: { subject: true, topic: true },
+      include: { subject: true, topic: true, folder: true },
       orderBy: { nextReviewAt: 'asc' },
       take: 50,
     });
@@ -98,6 +99,7 @@ const reviewFlashcard = async (req, res, next) => {
       card.easeFactor, card.interval, card.repetitions, rating
     );
 
+    const isCorrect = rating >= 2;
     const [updated] = await Promise.all([
       prisma.flashcard.update({
         where: { id },
@@ -106,6 +108,8 @@ const reviewFlashcard = async (req, res, next) => {
           interval: newInterval,
           repetitions: newReps,
           nextReviewAt,
+          totalReviews: { increment: 1 },
+          correctReviews: isCorrect ? { increment: 1 } : undefined,
         },
       }),
       prisma.flashcardReview.create({

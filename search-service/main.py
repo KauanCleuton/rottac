@@ -112,13 +112,35 @@ DISCIPLINAS_DB: dict[str, list[str]] = {
     "Química": ["química", "quimica", "química orgânica", "reações químicas"],
     "Biologia": ["biologia", "ciências biológicas", "genética", "ecologia"],
     "Programação": ["programação", "programacao", "algoritmos", "desenvolvimento de software",
-                    "linguagem de programação", "python", "java", "javascript"],
-    "Banco de Dados": ["banco de dados", "sql", "sgbd", "postgresql", "mysql",
-                       "modelagem de dados", "normalização"],
+                    "linguagem de programação", "python", "java", "javascript", "c#", "c++",
+                    "typescript", "orientação a objetos", "estruturas de dados", "complexidade",
+                    "programação orientada a objetos", "poo"],
+    "Desenvolvimento Web": ["desenvolvimento web", "html", "css", "javascript", "react",
+                            "reactjs", "react.js", "nodejs", "node.js", "angular", "vue",
+                            "frontend", "front-end", "backend", "back-end", "api rest",
+                            "restful", "json", "xml", "web services"],
+    "DevOps e Infraestrutura": ["devops", "docker", "kubernetes", "containers", "ci/cd",
+                                 "integração contínua", "aws", "azure", "google cloud",
+                                 "computação em nuvem", "cloud computing", "linux", "git",
+                                 "versionamento", "pipeline", "terraform"],
+    "Banco de Dados": ["banco de dados", "sql", "sgbd", "postgresql", "mysql", "oracle",
+                       "mongodb", "nosql", "modelagem de dados", "normalização",
+                       "stored procedures", "triggers", "indexação"],
     "Redes de Computadores": ["redes de computadores", "redes", "tcp/ip", "protocolo",
-                               "infraestrutura de redes", "switch", "roteador"],
+                               "infraestrutura de redes", "switch", "roteador", "firewall",
+                               "vpn", "dns", "dhcp", "http", "osi", "ethernet"],
     "Segurança da Informação": ["segurança da informação", "seguranca da informacao",
-                                 "cibersegurança", "criptografia", "vulnerabilidades"],
+                                 "cibersegurança", "criptografia", "vulnerabilidades",
+                                 "owasp", "pentest", "lgpd", "privacidade", "soc"],
+    "Engenharia de Software": ["engenharia de software", "metodologias ágeis", "scrum", "kanban",
+                                "uml", "padrões de projeto", "design patterns", "solid",
+                                "testes de software", "qualidade de software", "requisitos"],
+    "Inteligência Artificial": ["inteligência artificial", "machine learning", "aprendizado de máquina",
+                                 "deep learning", "redes neurais", "processamento de linguagem natural",
+                                 "visão computacional", "ia", "data science", "ciência de dados"],
+    "Sistemas Operacionais": ["sistemas operacionais", "linux", "windows server", "unix",
+                               "processos", "threads", "gerenciamento de memória",
+                               "sistema de arquivos", "virtualização"],
     "Ética no Serviço Público": ["ética", "etica", "conduta", "ética no serviço público",
                                   "código de ética", "probidade administrativa",
                                   "lei de improbidade"],
@@ -183,21 +205,106 @@ FISCAL_TRIBUTARIO_PADRAO = [
     "Matemática", "Matemática Financeira", "Língua Portuguesa", "Raciocínio Lógico",
 ]
 
+TI_GERAL_PADRAO = [
+    "Programação", "Desenvolvimento Web", "Banco de Dados", "Redes de Computadores",
+    "Segurança da Informação", "Engenharia de Software", "Sistemas Operacionais",
+    "Informática", "Língua Portuguesa", "Raciocínio Lógico",
+]
+
+TI_DEVOPS_PADRAO = [
+    "DevOps e Infraestrutura", "Redes de Computadores", "Segurança da Informação",
+    "Sistemas Operacionais", "Banco de Dados", "Programação",
+    "Informática", "Língua Portuguesa", "Raciocínio Lógico",
+]
+
+TI_IA_PADRAO = [
+    "Inteligência Artificial", "Programação", "Estatística",
+    "Banco de Dados", "Engenharia de Software", "Matemática",
+    "Língua Portuguesa", "Raciocínio Lógico",
+]
+
+JUDICIARIO_GERAL_PADRAO = [
+    "Língua Portuguesa", "Raciocínio Lógico", "Direito Constitucional",
+    "Direito Administrativo", "Direito Civil", "Direito Processual Civil",
+    "Ética no Serviço Público", "Noções de Administração Pública",
+]
+
+BANCARIO_PADRAO = [
+    "Língua Portuguesa", "Matemática", "Raciocínio Lógico",
+    "Conhecimentos Bancários", "Atualidades", "Economia",
+    "Contabilidade Geral", "Matemática Financeira",
+]
+
+LEGISLATIVO_PADRAO = [
+    "Língua Portuguesa", "Direito Constitucional", "Direito Administrativo",
+    "Raciocínio Lógico", "Ética no Serviço Público", "Atualidades",
+    "Redação Oficial",
+]
+
 def normalizar(texto: str) -> str:
     nfkd = unicodedata.normalize('NFKD', texto)
     return ''.join([c for c in nfkd if not unicodedata.combining(c)]).lower()
 
-def detectar_padrao_concurso(concurso_norm: str) -> list[str] | None:
-    """Detecta padrão de concurso por palavras-chave e retorna disciplinas padrão."""
-    if any(p in concurso_norm for p in ['policia militar', 'pm ', ' pm', 'soldado', 'cabo pm', 'sargento pm']):
-        return PM_DISCIPLINAS_PADRAO
-    if any(p in concurso_norm for p in ['policia civil', 'pc ', 'investigador', 'escrivao', 'delegado', 'agente policial']):
-        return PC_DISCIPLINAS_PADRAO
+def detectar_padrao_concurso(concurso_norm: str) -> tuple[list[str] | None, str | None]:
+    """
+    Detecta padrão de concurso por palavras-chave.
+    Retorna (lista_disciplinas, nome_padrao) ou (None, None).
+    IMPORTANTE: só retorna padrão quando tem ALTA certeza do cargo.
+    Jamais retorna padrão de Direito para cargos de TI.
+    """
+    # ─── TI / Tecnologia da Informação ──────────────────────────────────
+    ti_keywords = [
+        'ciencia da computacao', 'ciências da computação', 'analista de sistemas',
+        'analista de ti', 'tecnologia da informacao', 'tecnologia da informação',
+        'engenharia de software', 'desenvolvimento de sistemas', 'suporte de ti',
+        'infraestrutura', 'redes e comunicacoes', 'seguranca da informacao',
+        'banco de dados', 'programacao', 'desenvolvedor', 'analista de tecnologia',
+        'ti ', ' ti ', 'sistemas de informacao', 'sistemas de informação',
+    ]
+    if any(p in concurso_norm for p in ti_keywords):
+        # Sub-especialidades de TI
+        if any(p in concurso_norm for p in ['devops', 'infraestrutura', 'redes', 'cloud']):
+            return TI_DEVOPS_PADRAO, 'TI - DevOps/Infra'
+        if any(p in concurso_norm for p in ['inteligencia artificial', 'machine learning', 'data', 'ciencia de dados']):
+            return TI_IA_PADRAO, 'TI - IA/Data Science'
+        return TI_GERAL_PADRAO, 'TI - Geral'
+
+    # ─── Forças de segurança ────────────────────────────────────────────
+    if any(p in concurso_norm for p in ['policia militar', 'soldado pm', 'cabo pm', 'sargento pm']):
+        return PM_DISCIPLINAS_PADRAO, 'Polícia Militar'
+    if any(p in concurso_norm for p in ['policia federal', 'pf -', 'agente federal', 'delegado federal']):
+        return PC_DISCIPLINAS_PADRAO, 'Polícia Federal'
+    if any(p in concurso_norm for p in ['policia civil', 'investigador', 'escrivao', 'delegado estadual']):
+        return PC_DISCIPLINAS_PADRAO, 'Polícia Civil'
     if any(p in concurso_norm for p in ['bombeiro', 'cbm', 'corpo de bombeiro']):
-        return BOMBEIROS_DISCIPLINAS_PADRAO
-    if any(p in concurso_norm for p in ['fiscal', 'sefaz', 'receita estadual', 'auditor fiscal']):
-        return FISCAL_TRIBUTARIO_PADRAO
-    return None
+        return BOMBEIROS_DISCIPLINAS_PADRAO, 'Corpo de Bombeiros'
+
+    # ─── Fiscal/Tributário ──────────────────────────────────────────────
+    if any(p in concurso_norm for p in ['fiscal', 'sefaz', 'receita estadual', 'auditor fiscal', 'receita federal']):
+        return FISCAL_TRIBUTARIO_PADRAO, 'Fiscal/Tributário'
+
+    # ─── Judiciário ──────────────────────────────────────────────────────
+    if any(p in concurso_norm for p in ['judiciario', 'judiciário', 'tribunal', 'trf', 'tst', 'stj', 'stf', 'tjsp', 'tjrj', 'analista judiciario', 'tecnico judiciario']):
+        # Analista Judiciário de TI tem padrão específico — já capturado acima
+        # Para área administrativa/jurídica
+        if any(p in concurso_norm for p in ['direito', 'juridico', 'juridica', 'execucao de mandados']):
+            return JUDICIARIO_GERAL_PADRAO, 'Judiciário - Área Jurídica'
+        # Área administrativa genérica
+        if any(p in concurso_norm for p in ['administrativa', 'administrativo', 'contabilidade', 'financas']):
+            return JUDICIARIO_GERAL_PADRAO, 'Judiciário - Área Administrativa'
+        # Judiciário genérico — retorna padrão base
+        return JUDICIARIO_GERAL_PADRAO, 'Judiciário'
+
+    # ─── Bancário ────────────────────────────────────────────────────────
+    if any(p in concurso_norm for p in ['banco do brasil', 'bb -', 'caixa economica', 'cef ', 'bradesco', 'itau', 'bndes', 'banco central']):
+        return BANCARIO_PADRAO, 'Bancário'
+
+    # ─── Legislativo ─────────────────────────────────────────────────────
+    if any(p in concurso_norm for p in ['camara', 'câmara', 'senado', 'assembleia', 'legislativo']):
+        return LEGISLATIVO_PADRAO, 'Legislativo'
+
+    # Sem padrão identificado — deixa a busca web trabalhar
+    return None, None
 
 def extrair_estado_da_query(concurso: str) -> str:
     """Extrai o nome/sigla do estado da query para melhorar a busca."""
@@ -216,14 +323,20 @@ def extrair_disciplinas(textos: list[str]) -> list[dict]:
         score = 0
         for variacao in variacoes:
             variacao_norm = normalizar(variacao)
-            ocorrencias = len(re.findall(re.escape(variacao_norm), texto_completo))
-            score += ocorrencias
+            # Para termos curtos (< 5 chars como "sql", "css", "ia"), usa \b para palavra inteira
+            # Para termos longos, busca como substring (mais tolerante a variações)
+            if len(variacao_norm) <= 5:
+                pattern = r'\b' + re.escape(variacao_norm) + r'\b'
+            else:
+                pattern = re.escape(variacao_norm)
+            ocorrencias = len(re.findall(pattern, texto_completo))
+            score += ocorrencias * (2 if len(variacao_norm) > 10 else 1)  # termos longos valem mais
         if score > 0:
             resultado[disciplina] = score
 
     ordenado = sorted(resultado.items(), key=lambda x: x[1], reverse=True)
     return [
-        {"nome": disc, "confianca": min(100, score * 15)}
+        {"nome": disc, "confianca": min(100, score * 10)}
         for disc, score in ordenado
     ]
 
@@ -256,19 +369,15 @@ async def buscar_disciplinas(req: BuscarRequest):
     concurso_norm = normalizar(concurso)
     estado = extrair_estado_da_query(concurso)
 
-    # 1) Tenta detectar padrão por tipo de concurso (PM, PC, Bombeiros, etc.)
-    padrao = detectar_padrao_concurso(concurso_norm)
-    padrao_nome = None
-    if padrao:
-        tipo = "PM" if "policia militar" in concurso_norm or "pm " in concurso_norm or "soldado" in concurso_norm else \
-               "PC" if "policia civil" in concurso_norm or "delegado" in concurso_norm else \
-               "Bombeiros" if "bombeiro" in concurso_norm else "Fiscal"
-        padrao_nome = tipo
+    # 1) Detecta padrão específico do cargo/área
+    padrao, padrao_nome = detectar_padrao_concurso(concurso_norm)
 
-    # 2) Monta queries de busca para a web
+    # 2) Busca na web com queries específicas para o cargo
+    # Inclui o cargo na query para não confundir disciplinas de áreas diferentes
     queries = [
-        f"{concurso} {banca} edital disciplinas matérias conteúdo programático".strip(),
-        f"concurso {concurso} {estado} matérias {banca} 2024 2025".strip(),
+        f"{concurso} {banca} edital conteúdo programático 2024 2025".strip(),
+        f"concurso {concurso} {estado} matérias disciplinas edital".strip(),
+        f'"{concurso}" conteúdo programático disciplinas'.strip(),
     ]
 
     textos_coletados: list[str] = []
@@ -278,7 +387,7 @@ async def buscar_disciplinas(req: BuscarRequest):
         resultados = []
         try:
             with DDGS() as ddgs:
-                for r in ddgs.text(query, region='br-pt', safesearch='off', max_results=10):
+                for r in ddgs.text(query, region='br-pt', safesearch='off', max_results=12):
                     body = r.get('body', '')
                     title = r.get('title', '')
                     resultados.append(f"{title} {body}")
@@ -286,7 +395,8 @@ async def buscar_disciplinas(req: BuscarRequest):
             pass
         return resultados
 
-    for query in queries[:2]:
+    # Executa as 3 queries
+    for query in queries:
         textos = await loop.run_in_executor(None, buscar_ddg, query)
         textos_coletados.extend(textos)
 
@@ -295,8 +405,19 @@ async def buscar_disciplinas(req: BuscarRequest):
     if textos_coletados:
         disciplinas_web = extrair_disciplinas(textos_coletados)
 
-    # 4) Combina: se encontrou na web, usa. Se não encontrou suficiente, complementa com padrão.
-    if len(disciplinas_web) >= 5:
+    # 4) Estratégia de combinação:
+    # - Se web retornou >= 4 resultados → usa web como primário, complementa com padrão (sem duplicar)
+    # - Se web retornou < 4 mas temos padrão → usa padrão + web
+    # - Se web retornou < 4 e não há padrão → retorna o que tem da web
+    # NUNCA adicionar padrão de área errada
+
+    if len(disciplinas_web) >= 4:
+        # Web domina — se há padrão compatível, adiciona disciplinas do padrão que a web não pegou
+        if padrao:
+            nomes_web = {d["nome"] for d in disciplinas_web}
+            for disc_padrao in padrao:
+                if disc_padrao not in nomes_web:
+                    disciplinas_web.append({"nome": disc_padrao, "confianca": 50})
         return BuscarResponse(
             disciplinas=disciplinas_web,
             fonte="web",
@@ -304,15 +425,13 @@ async def buscar_disciplinas(req: BuscarRequest):
             padrao_detectado=padrao_nome,
         )
 
-    # Fallback: padrão detectado por tipo
     if padrao:
+        # Padrão específico identificado → usa como base + enriquece com web
         disciplinas_fallback = [{"nome": d, "confianca": 70} for d in padrao]
-        # Adiciona os da web que não estão no padrão
         nomes_padrao = {d["nome"] for d in disciplinas_fallback}
         for d in disciplinas_web:
             if d["nome"] not in nomes_padrao:
                 disciplinas_fallback.append(d)
-
         return BuscarResponse(
             disciplinas=disciplinas_fallback,
             fonte="padrao_detectado",
@@ -320,11 +439,14 @@ async def buscar_disciplinas(req: BuscarRequest):
             padrao_detectado=padrao_nome,
         )
 
-    # Ultimo fallback: retorna o que achou na web mesmo sendo pouco
-    if disciplinas_web:
-        return BuscarResponse(disciplinas=disciplinas_web, fonte="web_parcial", total=len(disciplinas_web))
-
-    return BuscarResponse(disciplinas=[], fonte="sem_resultados", total=0)
+    # Sem padrão e web insuficiente → retorna o que tem (pode ser vazio)
+    # NUNCA inventar disciplinas de uma área que não sabemos qual é
+    return BuscarResponse(
+        disciplinas=disciplinas_web,
+        fonte="web_parcial" if disciplinas_web else "sem_resultados",
+        total=len(disciplinas_web),
+        padrao_detectado=None,
+    )
 
 @app.get("/disciplinas-lista")
 async def listar_todas():
@@ -447,6 +569,630 @@ async def react_to_event(request: EventReactionRequest):
     return result
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# ─── EDITAL EXTRACTOR ───────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+
+from fastapi import UploadFile, File as FastAPIFile
+import tempfile
+import os
+
+@app.post("/text")
+async def extract_text(file: UploadFile = FastAPIFile(...)):
+    """Retorna o texto bruto extraído do PDF — usado para flashcards."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        text = ""
+        try:
+            import pdfplumber
+            with pdfplumber.open(tmp_path) as pdf:
+                for page in pdf.pages[:100]:
+                    extracted = page.extract_text()
+                    if extracted:
+                        text += extracted + "\n"
+        except ImportError:
+            pass
+
+        if not text:
+            try:
+                import fitz
+                doc = fitz.open(tmp_path)
+                for page in doc:
+                    text += page.get_text() + "\n"
+                doc.close()
+            except ImportError:
+                pass
+
+        print(f"[/text] {file.filename} | {len(content)} bytes | {len(text)} chars extraídos")
+        if text:
+            print(f"[/text] Primeiros 300 chars:\n{text[:300]}")
+
+        return {"text": text, "chars": len(text)}
+    finally:
+        os.unlink(tmp_path)
+
+
+@app.post("/extract-questions")
+async def extract_questions(file: UploadFile = FastAPIFile(...)):
+    """
+    Extrai questões de um PDF de provas/simulados.
+
+    Detecta 3 formatos:
+      A) Questões + GABARITO simples no final (só letras)
+      B) Questões + GABARITO COMENTADO como seção separada
+      C) Comentário inline após cada questão
+
+    Retorna lista de questões com enunciado, alternativas, resposta e explicação.
+    """
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        # ── Extrai texto ───────────────────────────────────────────────────
+        text = ""
+        try:
+            import pdfplumber
+            with pdfplumber.open(tmp_path) as pdf:
+                for page in pdf.pages[:200]:
+                    t = page.extract_text()
+                    if t:
+                        text += t + "\n"
+        except ImportError:
+            try:
+                import fitz
+                doc = fitz.open(tmp_path)
+                for page in doc:
+                    text += page.get_text() + "\n"
+                doc.close()
+            except ImportError:
+                pass
+
+        if not text.strip():
+            return {"questions": [], "format": "unknown", "error": "Não foi possível extrair texto do PDF."}
+
+        print(f"[/extract-questions] {file.filename} | {len(text)} chars")
+
+        # ── Detecta formato ────────────────────────────────────────────────
+        fmt = detect_question_format(text)
+        print(f"[/extract-questions] Formato detectado: {fmt}")
+
+        # ── Extrai questões ────────────────────────────────────────────────
+        questions = extract_questions_from_text(text, fmt)
+        print(f"[/extract-questions] {len(questions)} questões extraídas")
+
+        return {"questions": questions, "format": fmt, "total": len(questions)}
+    finally:
+        os.unlink(tmp_path)
+
+
+def detect_question_format(text: str) -> str:
+    """
+    Detecta o formato do PDF de questões:
+      'inline'    — resposta/comentário logo após cada questão
+      'commented' — seção GABARITO COMENTADO separada
+      'simple'    — só gabarito de letras no final
+    """
+    text_lower = text.lower()
+    # Gabarito comentado como seção separada
+    if re.search(r'gabarito\s+comentado', text_lower):
+        return 'commented'
+    # Comentário/resolução inline (aparece frequentemente entre questões)
+    inline_count = len(re.findall(
+        r'\n\s*(?:resposta|comentário|resolução|gabarito)\s*[:\-–]', text_lower
+    ))
+    if inline_count >= 3:
+        return 'inline'
+    # Gabarito simples (bloco de letras no final)
+    if re.search(r'gabarito', text_lower):
+        return 'simple'
+    return 'simple'
+
+
+def clean_text_for_extraction(text: str) -> str:
+    """Limpa artefatos comuns de PDF antes de extrair questões."""
+    # Normaliza quebras de linha
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    # Remove hífens de quebra de palavra
+    text = re.sub(r'-\n([a-záéíóúãõàêôûç])', r'\1', text, flags=re.IGNORECASE)
+    # Colapsa espaços múltiplos em cada linha
+    text = re.sub(r'[^\S\n]+', ' ', text)
+    # Remove linhas que são só números de página ou cabeçalhos curtos (<4 chars)
+    text = re.sub(r'^\s{0,3}\d{1,3}\s*$', '', text, flags=re.MULTILINE)
+    return text
+
+
+def extract_questions_from_text(text: str, fmt: str) -> list:
+    """Extrai questões baseado no formato detectado."""
+    text = clean_text_for_extraction(text)
+
+    # ── Separa bloco de questões do gabarito ──────────────────────────────
+    questions_block = text
+    gabarito_block = ""
+    gabarito_comentado_block = ""
+
+    # Gabarito comentado
+    m = re.search(r'\n\s*GABARITO\s+COMENTADO\b', text, re.IGNORECASE)
+    if m:
+        questions_block = text[:m.start()]
+        gabarito_comentado_block = text[m.end():]
+        fmt = 'commented'
+    else:
+        # Gabarito simples — procura o bloco mais tarde no texto (últimos 25%)
+        m = re.search(r'\n\s*GABARITO\s*[\n:]', text, re.IGNORECASE)
+        if m and m.start() > len(text) * 0.5:
+            questions_block = text[:m.start()]
+            gabarito_block = text[m.end():]
+            if fmt == 'inline':
+                fmt = 'inline'  # mantém inline mesmo com gabarito simples
+            else:
+                fmt = 'simple'
+
+    print(f"[extract] bloco questões: {len(questions_block)} chars | gabarito: {len(gabarito_block)} | comentado: {len(gabarito_comentado_block)}")
+
+    # ── Divide em blocos de questão ───────────────────────────────────────
+    raw_questions = split_into_questions(questions_block)
+    print(f"[extract] blocos brutos: {len(raw_questions)}")
+    if raw_questions:
+        print(f"[extract] primeiro bloco (300 chars): {raw_questions[0][1][:300]}")
+
+    questions = []
+    for num, q_text in raw_questions:
+        q = parse_single_question(num, q_text, fmt)
+        if q:
+            questions.append(q)
+
+    print(f"[extract] questões parseadas: {len(questions)} | sem alternativas descartadas: {len(raw_questions)-len(questions)}")
+
+    # ── Associa gabarito simples ──────────────────────────────────────────
+    if gabarito_block:
+        answers = parse_simple_gabarito(gabarito_block)
+        print(f"[extract] gabarito simples: {len(answers)} respostas → {dict(list(answers.items())[:5])}")
+        for q in questions:
+            if answers.get(q['number']):
+                q['answer'] = answers[q['number']]
+
+    # ── Associa gabarito comentado ────────────────────────────────────────
+    if gabarito_comentado_block:
+        commented = parse_commented_gabarito(gabarito_comentado_block)
+        print(f"[extract] gabarito comentado: {len(commented)} entradas")
+        for q in questions:
+            if q['number'] in commented:
+                q['answer'] = commented[q['number']].get('answer', q.get('answer', ''))
+                q['explanation'] = commented[q['number']].get('explanation', '')
+
+    return questions
+
+
+def split_into_questions(text: str) -> list:
+    """
+    Divide o texto em blocos por número de questão.
+    Cobre: "1." "1)" "01." "01)" "Questão 1" "QUESTÃO 01" "1 -" "1 –"
+    O número deve aparecer no início da linha (com até 4 espaços de indent).
+    """
+    pattern = re.compile(
+        r'(?:^|\n) {0,4}'                        # início de linha, até 4 espaços
+        r'(?:quest[aã]o\s*n?[oº°]?\s*)?'         # "Questão" / "Questão nº" opcional
+        r'(0?[1-9]\d{0,2})'                       # número: 1-999, com zero à esquerda opcional
+        r'\s*[.):\-–]\s',                          # separador: ) . : - –
+        re.IGNORECASE | re.MULTILINE
+    )
+
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return []
+
+    # Filtra sequências que parecem ser alternativas (A, B, C, D, E soltos)
+    # e garante que os números são consecutivos (evita pegar anos como "2024.")
+    valid = []
+    last_num = 0
+    for m in matches:
+        num = int(m.group(1))
+        # Aceita se for consecutivo ou próximo (±5) do último — evita pegar datas
+        if num == 1 or (0 < num - last_num <= 5) or (last_num == 0 and num <= 10):
+            valid.append((num, m))
+            last_num = num
+
+    if not valid:
+        # Fallback: aceita todos sem filtro de consecutividade
+        valid = [(int(m.group(1)), m) for m in matches]
+
+    blocks = []
+    for i, (num, m) in enumerate(valid):
+        start = m.end()
+        end = valid[i + 1][1].start() if i + 1 < len(valid) else len(text)
+        block_text = text[start:end].strip()
+        if len(block_text) > 15:
+            blocks.append((num, block_text))
+
+    return blocks
+
+
+def parse_single_question(num: int, text: str, fmt: str) -> dict | None:
+    """Parseia uma questão individual extraindo enunciado, alternativas e resposta inline."""
+
+    # ── Detecta alternativas ──────────────────────────────────────────────
+    # Cobre: "A)" "(A)" "A." "A -" "a)" — sempre no início da linha
+    alt_pattern = re.compile(
+        r'(?:^|\n) {0,6}'           # início de linha
+        r'\(?([A-Ea-e])\)?'         # letra: A, (A), a
+        r'[\s.):\-–]{1,3}'          # separador
+        r'(.+?)'                    # conteúdo da alternativa
+        r'(?='                      # lookahead: próxima alternativa ou fim
+        r'\n {0,6}\(?[A-Ea-e]\)?[\s.):\-–]'
+        r'|\n\n|\Z)',
+        re.DOTALL
+    )
+
+    alt_matches = list(alt_pattern.finditer(text))
+
+    if len(alt_matches) < 2:
+        return None  # não tem alternativas suficientes
+
+
+    # Enunciado = tudo antes da primeira alternativa
+    statement_end = alt_matches[0].start()
+    statement = text[:statement_end].strip()
+    statement = re.sub(r'^[\d.)\s]+', '', statement).strip()
+
+    if len(statement) < 10:
+        return None
+
+    # Captura alternativas
+    for m in alt_matches:
+        letter = m.group(1).upper()
+        content = m.group(2).strip()
+        # Remove texto de resposta inline que pode ter entrado na alternativa
+        content = re.split(r'\n\s*(?:resposta|comentário|resolução|gabarito)\s*[:\-–]', content, flags=re.IGNORECASE)[0].strip()
+        if letter in 'ABCDE':
+            options[letter] = content
+
+    # ── Tenta capturar resposta e explicação após as alternativas ────────
+    answer = ''
+    explanation = ''
+    after_options = text[alt_matches[-1].end():].strip()
+
+    # Resposta inline: "Resposta: C" / "Gabarito: C" / "Resposta Certa: C"
+    ans_m = re.search(
+        r'(?:resposta\s*(?:certa|correta)?|gabarito)\s*[:\-–]?\s*\(?([A-Ea-e])\)?',
+        after_options, re.IGNORECASE
+    )
+    if ans_m:
+        answer = ans_m.group(1).upper()
+
+    # Explicação inline
+    exp_m = re.search(
+        r'(?:comentário|resolução|explicação|justificativa)\s*[:\-–]\s*(.+?)(?=\n\n|\Z)',
+        after_options, re.IGNORECASE | re.DOTALL
+    )
+    if exp_m:
+        explanation = exp_m.group(1).strip()[:800]
+    elif answer and after_options and len(after_options) > 30:
+        # Tudo depois da resposta pode ser a explicação
+        rest = after_options[ans_m.end():].strip() if ans_m else ''
+        if len(rest) > 20:
+            explanation = rest[:800]
+
+    return {
+        'number': num,
+        'statement': statement[:1000],
+        'options': options,
+        'answer': answer,
+        'explanation': explanation,
+    }
+
+
+def parse_simple_gabarito(text: str) -> dict:
+    """
+    Parseia gabarito simples. Formatos aceitos:
+      "1-C  2-A  3-D"
+      "1. C   2. A"
+      "01 C   02 A"          (sem separador)
+      "1C 2A 3B"             (colado)
+      tabela com linhas "| 1 | C |"
+    """
+    answers = {}
+
+    # Formato com separador: "1-C", "1.C", "1) C", "01 - C"
+    for m in re.finditer(r'\b(0?[1-9]\d{0,2})\s*[-.):\s]\s*([A-Ea-e])\b', text):
+        num = int(m.group(1))
+        answers[num] = m.group(2).upper()
+
+    # Formato colado sem separador: "1C 2A 3B" (só se ainda não encontrou)
+    if not answers:
+        for m in re.finditer(r'\b(0?[1-9]\d{0,2})([A-Ea-e])\b', text):
+            num = int(m.group(1))
+            answers[num] = m.group(2).upper()
+
+    return answers
+
+
+def parse_commented_gabarito(text: str) -> dict:
+    """
+    Parseia gabarito comentado.
+    Formato: "1. Resposta: C\nComentário: ..."
+    ou "1. (C) A alternativa C está correta..."
+    """
+    result = {}
+    # Divide por número de questão
+    blocks = re.split(r'\n\s*(\d{1,3})\s*[.)]\s*', text)
+
+    i = 1
+    while i + 1 < len(blocks):
+        try:
+            num = int(blocks[i])
+            content = blocks[i + 1]
+
+            answer = ''
+            explanation = ''
+
+            # Tenta achar a resposta
+            ans_m = re.search(r'(?:resposta|gabarito)\s*[:\-–]?\s*\(?([A-Ea-e])\)?', content, re.IGNORECASE)
+            if ans_m:
+                answer = ans_m.group(1).upper()
+            else:
+                # Formato: "(C) A alternativa..."
+                alt_m = re.match(r'\s*\(?([A-Ea-e])\)?\s', content)
+                if alt_m:
+                    answer = alt_m.group(1).upper()
+
+            # Tudo o que sobra é a explicação
+            explanation = re.sub(
+                r'^.*?(?:resposta|gabarito)\s*[:\-–]?\s*[A-Ea-e]\)?\.?\s*',
+                '', content, flags=re.IGNORECASE
+            ).strip()[:800]
+
+            if answer:
+                result[num] = {'answer': answer, 'explanation': explanation}
+        except (ValueError, IndexError):
+            pass
+        i += 2
+
+    return result
+
+
+@app.post("/extract")
+async def extract_edital(file: UploadFile = FastAPIFile(...)):
+    """
+    Extrai disciplinas e tópicos de um edital PDF.
+
+    Algoritmo:
+    1. Lê o PDF com pdfplumber (melhor para layout) ou fallback PyMuPDF
+    2. Procura seção "CONTEÚDO PROGRAMÁTICO" ou similar
+    3. Aplica NLP/regex para extrair disciplinas e tópicos
+    4. Infere pesos baseado em número de tópicos + frequência
+    5. Retorna estrutura validável pelo usuário
+    """
+    # Salva temporariamente
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        text = ""
+        method_used = "none"
+
+        # Tenta pdfplumber primeiro
+        try:
+            import pdfplumber
+            with pdfplumber.open(tmp_path) as pdf:
+                for page in pdf.pages[:50]:  # máximo 50 páginas
+                    extracted = page.extract_text()
+                    if extracted:
+                        text += extracted + "\n"
+            if text:
+                method_used = "pdfplumber"
+        except ImportError:
+            print("[/extract] pdfplumber não instalado, tentando PyMuPDF...")
+
+        # Fallback: PyMuPDF
+        if not text:
+            try:
+                import fitz
+                doc = fitz.open(tmp_path)
+                for page in doc:
+                    text += page.get_text() + "\n"
+                doc.close()
+                if text:
+                    method_used = "pymupdf"
+            except ImportError:
+                print("[/extract] PyMuPDF não instalado.")
+
+        print(f"[/extract] Arquivo recebido: {file.filename} | Tamanho do buffer: {len(content)} bytes | Extrator: {method_used} | Chars extraídos: {len(text)}")
+
+        if not text:
+            print("[/extract] ERRO: nenhum texto extraído do PDF. Instale pdfplumber ou PyMuPDF.")
+            return {"subjects": [], "method": "no_extractor", "warning": "Instale pdfplumber ou PyMuPDF para extração."}
+
+        print(f"[/extract] Primeiros 500 chars do texto:\n{text[:500]}")
+        print(f"[/extract] ---")
+
+        subjects = extract_subjects_from_text(text)
+        print(f"[/extract] Disciplinas encontradas ({len(subjects)}): {[s['name'] for s in subjects]}")
+
+        return {
+            "subjects": subjects,
+            "method": f"pdf_extraction_{method_used}",
+            "totalPages": len(text.split('\n')),
+        }
+    finally:
+        os.unlink(tmp_path)
+
+
+def extract_subjects_from_text(text: str) -> list[dict]:
+    """
+    Extrai disciplinas em dois passos:
+    PASSO 1 — Extrai nomes das disciplinas da tabela (DA PROVA OBJETIVA)
+              ou do MÓDULO I/II dentro do CONTEÚDO PROGRAMÁTICO
+    PASSO 2 — Para cada disciplina encontrada, procura a seção dela
+              no texto (ex: 'LÍNGUA PORTUGUESA\n tópico1, tópico2...')
+              e extrai os tópicos separados por vírgulas ou por linha
+    """
+    text_norm_full = normalizar(text)
+
+    # ════════════════════════════════════════════════════════════════
+    # PASSO 1: coletar nomes das disciplinas + peso (nº de questões)
+    # ════════════════════════════════════════════════════════════════
+    discipline_list = []  # lista de {'name': str, 'weight': float}
+
+    def is_noise(s):
+        s = s.strip()
+        return (
+            len(s) < 4 or len(s) > 100 or
+            re.match(r'^(m[oó]dulo|anexo|total|conhecimentos?\s+(b[aá]sicos?|espec[ií]ficos?)|'
+                     r'n[uú]mero|quest[oõ]es|disciplinas?|mat[eé]rias?)', s, re.IGNORECASE) or
+            re.search(r'\d{4}', s)  # anos (ex: "2024")
+        )
+
+    # ── 1a. Tabela "DISCIPLINAS  Número de Questões" ─────────────────
+    tabela_match = re.search(
+        r'(?:DISCIPLINAS?|Mat[eé]rias?)\s+N[uú]mero\s+de\s+Quest[oõ]es(.*?)(?=TOTAL\b|\Z)',
+        text, re.IGNORECASE | re.DOTALL
+    )
+    if tabela_match:
+        for linha in tabela_match.group(1).split('\n'):
+            linha = linha.strip()
+            if not linha:
+                continue
+            m = re.match(r'^(.+?)\s+(\d{1,3})\s*$', linha)
+            if m:
+                nome, qtd = m.group(1).strip(), int(m.group(2))
+                weight = round(max(1.0, qtd / 10), 1)
+                # Disciplinas compostas: "Direito Penal / Processual Penal" → duas entradas
+                for parte in [p.strip() for p in nome.split('/')]:
+                    if not is_noise(parte):
+                        discipline_list.append({'name': parte, 'weight': weight})
+            else:
+                if not is_noise(linha):
+                    discipline_list.append({'name': linha, 'weight': 1.0})
+
+    # ── 1b. MÓDULO I / MÓDULO II dentro do CONTEÚDO PROGRAMÁTICO ────
+    # Pega o bloco do conteúdo programático
+    cp_match = re.search(
+        r'(?:ANEXO\s+[IVXLC\d]+[^\n]*)?\s*CONTE[ÚU]DO\s+PROGRAM[ÁA]TICO(.*)',
+        text, re.IGNORECASE | re.DOTALL
+    )
+    bloco_cp = cp_match.group(1) if cp_match else ''
+    if not bloco_cp:
+        mod_m = re.search(r'M[ÓO]DULO\s+[IVXLC\d]', text, re.IGNORECASE)
+        if mod_m:
+            bloco_cp = text[mod_m.start():]
+
+    if bloco_cp and not discipline_list:
+        # Dentro do bloco, cada linha em MAIÚSCULAS isolada é nome de disciplina
+        current_weight = 1.0
+        for linha in bloco_cp.split('\n'):
+            linha = linha.strip()
+            if not linha:
+                continue
+            # Ajusta peso pelo módulo
+            if re.match(r'^M[ÓO]DULO\s+[IVXLC\d]+', linha, re.IGNORECASE):
+                current_weight = 1.5 if 'espec' in normalizar(linha) else 1.0
+                continue
+            # Linha toda maiúscula, sem números = nome de disciplina
+            if (linha == linha.upper() and
+                    re.match(r'^[A-ZÁÉÍÓÚÃÕÀÊÔÛÇÃ\s/]{4,70}$', linha) and
+                    not is_noise(linha)):
+                discipline_list.append({'name': linha.title(), 'weight': current_weight})
+
+    # ── 1c. Fallback pelo DISCIPLINAS_DB ────────────────────────────
+    if not discipline_list:
+        for disciplina, variacoes in DISCIPLINAS_DB.items():
+            for variacao in variacoes:
+                if normalizar(variacao) in text_norm_full:
+                    discipline_list.append({'name': disciplina, 'weight': 1.0})
+                    break
+
+    # Remove duplicatas mantendo a primeira ocorrência
+    seen_keys = set()
+    unique_disciplines = []
+    for d in discipline_list:
+        key = normalizar(d['name'])[:25]
+        if key not in seen_keys:
+            seen_keys.add(key)
+            unique_disciplines.append(d)
+    discipline_list = unique_disciplines
+
+    # ════════════════════════════════════════════════════════════════
+    # PASSO 2: para cada disciplina, encontrar sua seção no texto
+    #          e extrair tópicos (por vírgula ou por linha)
+    # ════════════════════════════════════════════════════════════════
+    subjects = []
+
+    for disc in discipline_list:
+        name = disc['name']
+        weight = disc['weight']
+        topics = []
+
+        # Busca a seção da disciplina — o nome dela aparece como cabeçalho
+        # seguido dos tópicos (separados por vírgula, ponto-e-vírgula ou por linha)
+        name_norm = normalizar(name)
+        # Usa as primeiras palavras significativas para achar no texto
+        search_term = ' '.join(name_norm.split()[:3])  # ex: "lingua portuguesa"
+        idx = text_norm_full.find(search_term)
+
+        if idx >= 0:
+            # Pega até 1500 chars após o nome da disciplina
+            bloco = text[idx: idx + 1500]
+            lines = bloco.split('\n')
+
+            # Pula a primeira linha (é o nome da disciplina) e coleta tópicos
+            topic_text = ''
+            for i, linha in enumerate(lines[1:], 1):
+                linha = linha.strip()
+                if not linha:
+                    continue
+                # Para quando achar outro cabeçalho de seção (próxima disciplina ou módulo)
+                linha_norm = normalizar(linha)
+                is_next_header = (
+                    (linha == linha.upper() and len(linha) > 4 and len(linha) < 80 and
+                     re.match(r'^[A-ZÁÉÍÓÚÃÕÀÊ\s/]{4,}$', linha)) or
+                    re.match(r'^m[oó]dulo\s+[ivxlc\d]', linha_norm) or
+                    re.match(r'^anexo\s+', linha_norm) or
+                    re.match(r'^\d+\s*\.\s+[A-Z]', linha)  # "9. DA PROVA..."
+                )
+                if is_next_header and i > 1:
+                    break
+                topic_text += ' ' + linha
+
+            # Tópicos podem vir separados por vírgula, ponto-e-vírgula ou ponto
+            topic_text = topic_text.strip()
+            if ',' in topic_text or ';' in topic_text:
+                # Separados por vírgula/ponto-e-vírgula
+                raw_topics = re.split(r'[,;]', topic_text)
+            else:
+                # Separados por linha ou ponto final
+                raw_topics = re.split(r'\.\s+|\n', topic_text)
+
+            for t in raw_topics:
+                t = re.sub(r'^[\d.]+\s+|^[-•–*]\s+', '', t).strip()
+                if 3 < len(t) < 150:
+                    topics.append(t)
+
+        subjects.append({
+            'name': name,
+            'weight': weight,
+            'topics': topics[:25],
+            'confidence': 0.9 if topics else 0.7,
+        })
+
+    # Normaliza pesos proporcionalmente ao máximo encontrado
+    if subjects:
+        max_w = max(s['weight'] for s in subjects)
+        if max_w > 3:
+            for s in subjects:
+                s['weight'] = round(1.0 + (s['weight'] / max_w) * 2.0, 1)
+
+    print(f"[extract_subjects] {len(subjects)} disciplinas: {[s['name'] for s in subjects]}")
+    return subjects
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=3003, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=3003, reload=True)
