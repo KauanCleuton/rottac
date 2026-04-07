@@ -50,6 +50,7 @@ const login = async (req, res, next) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         experienceLevel: user.experienceLevel,
         examName: user.examName,
         examDate: user.examDate,

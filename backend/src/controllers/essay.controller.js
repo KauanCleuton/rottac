@@ -1,27 +1,65 @@
 const prisma = require('../utils/prisma');
 const { success, created, notFound } = require('../utils/response');
 const crypto = require('crypto');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// ─── Multer para PDF do aluno ──────────────────────────────────────────────────
+
+const essayPdfStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../../uploads/essay-pdfs');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `essay_${req.user?.id || 'u'}_${Date.now()}${ext}`);
+  },
+});
+const uploadEssayPdf = multer({
+  storage: essayPdfStorage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Apenas arquivos PDF são aceitos'));
+  },
+}).single('pdf');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const countWords = (text) => text.trim().split(/\s+/).filter(Boolean).length;
+const countWords = (text) => (!text ? 0 : text.trim().split(/\s+/).filter(Boolean).length);
 
 const computeTotal = (c1, c2, c3, c4, c5) =>
   [c1, c2, c3, c4, c5].reduce((s, v) => s + (v || 0), 0);
 
 // ─── ALUNO: Submeter redação ───────────────────────────────────────────────────
 
-const submitEssay = async (req, res, next) => {
-  try {
+const submitEssay = (req, res, next) => {
+  uploadEssayPdf(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    try {
+      await _doSubmitEssay(req, res);
+    } catch (e) {
+      next(e);
+    }
+  });
+};
+
+const _doSubmitEssay = async (req, res) => {
     const { title, theme, content, parentId } = req.body;
     const studentId = req.user.id;
+    const pdfUrl = req.file ? `/uploads/essay-pdfs/${req.file.filename}` : null;
 
-    if (!content || content.trim().length < 50) {
-      return res.status(400).json({ error: 'Redação muito curta (mínimo 50 caracteres).' });
+    // PDF ou texto obrigatório
+    if (!pdfUrl && (!content || content.trim().length < 50)) {
+      return res.status(400).json({ error: 'Envie o texto (mínimo 50 caracteres) ou um arquivo PDF.' });
     }
 
-    const wordCount = countWords(content);
-    const charCount = content.length;
+    const finalContent = content || '(Redação enviada em PDF — ver anexo)';
+    const wordCount = countWords(finalContent);
+    const charCount = finalContent.length;
 
     // Se for reescrita, incrementa versão
     let version = 1;
@@ -29,13 +67,12 @@ const submitEssay = async (req, res, next) => {
       const parent = await prisma.essay.findFirst({ where: { id: parentId, studentId } });
       if (parent) {
         version = parent.version + 1;
-        // Atualiza status da versão anterior para REWRITTEN
         await prisma.essay.update({ where: { id: parentId }, data: { status: 'REWRITTEN' } });
       }
     }
 
     const essay = await prisma.essay.create({
-      data: { studentId, title, theme, content, wordCount, charCount, version, parentId: parentId || null },
+      data: { studentId, title, theme, content: finalContent, pdfUrl, wordCount, charCount, version, parentId: parentId || null },
     });
 
     // XP por escrever redação
@@ -62,9 +99,6 @@ const submitEssay = async (req, res, next) => {
     }
 
     return created(res, essay, 'Redação enviada com sucesso!');
-  } catch (err) {
-    next(err);
-  }
 };
 
 // ─── ALUNO: Listar redações ────────────────────────────────────────────────────

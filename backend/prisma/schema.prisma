@@ -1111,6 +1111,7 @@ model Essay {
   title       String
   theme       String?
   content     String      @db.LongText
+  pdfUrl      String?
   status      EssayStatus @default(PENDING)
   wordCount   Int?
   charCount   Int?
