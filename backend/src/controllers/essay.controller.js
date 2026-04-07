@@ -37,14 +37,15 @@ const computeTotal = (c1, c2, c3, c4, c5) =>
 // ─── ALUNO: Submeter redação ───────────────────────────────────────────────────
 
 const submitEssay = (req, res, next) => {
-  uploadEssayPdf(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    try {
-      await _doSubmitEssay(req, res);
-    } catch (e) {
-      next(e);
-    }
-  });
+  const isMultipart = (req.headers['content-type'] || '').includes('multipart/form-data');
+  if (isMultipart) {
+    uploadEssayPdf(req, res, async (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      try { await _doSubmitEssay(req, res); } catch (e) { next(e); }
+    });
+  } else {
+    _doSubmitEssay(req, res).catch(next);
+  }
 };
 
 const _doSubmitEssay = async (req, res) => {
