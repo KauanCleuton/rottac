@@ -443,9 +443,29 @@ const getStudentInsights = async (req, res, next) => {
   }
 };
 
+// ─── PROFESSOR: Salvar anotações (rabiscos) do PDF ────────────────────────────
+
+const saveAnnotations = async (req, res, next) => {
+  try {
+    const { id: essayId } = req.params;
+    const { annotations } = req.body; // JSON string: [{page, dataUrl}]
+
+    // Upsert correction para garantir que existe
+    const correction = await prisma.essayCorrection.upsert({
+      where: { essayId },
+      create: { essayId, teacherId: req.user.id, pdfAnnotations: JSON.stringify(annotations) },
+      update: { pdfAnnotations: JSON.stringify(annotations) },
+    });
+
+    return success(res, { ok: true }, 'Anotações salvas');
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getDashboard, listEssays, listStudents, getStudentStats,
   correctEssay, addComment, uploadAudio, uploadCorrectedFile,
   listTemplates, createTemplate, useTemplate, resolveComment,
-  getStudentInsights,
+  getStudentInsights, saveAnnotations,
 };

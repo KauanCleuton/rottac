@@ -1155,6 +1155,7 @@ model EssayCorrection {
   totalScore       Int?      // soma automática 0-1000
   audioUrl         String?   // áudio gravado pelo professor
   correctedFileUrl String?   // PDF corrigido
+  pdfAnnotations   String?   @db.LongText  // JSON com rabiscos do professor por página
   requestRewrite   Boolean   @default(false)
   rewriteDeadline  DateTime?
   correctedAt      DateTime  @default(now())

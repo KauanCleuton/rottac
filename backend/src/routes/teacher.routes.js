@@ -15,6 +15,7 @@ router.get('/essays', c.listEssays);
 
 // Correção
 router.post('/essays/:id/correct', c.correctEssay);
+router.patch('/essays/:id/annotations', c.saveAnnotations);
 router.post('/essays/:essayId/comments', c.addComment);
 router.post('/essays/:essayId/audio', c.uploadAudio);
 router.post('/essays/:essayId/file', c.uploadCorrectedFile);

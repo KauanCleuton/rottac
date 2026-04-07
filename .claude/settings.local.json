@@ -11,7 +11,10 @@
       "Bash(npx next:*)",
       "Bash(ls:*)",
       "Bash([ ! -d \"/c/Users/cleut/Desktop/aprova-ai/frontend/src/app/\\(app\\)/$page\" ])",
-      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const p=JSON.parse\\(d\\); console.log\\(p.name, p.version, p.main\\)\")"
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const p=JSON.parse\\(d\\); console.log\\(p.name, p.version, p.main\\)\")",
+      "Read(//c/Users/cleut/AppData/Local/Temp/claude/C--Users-cleut-Desktop-aprova-ai/4d15f3b8-4d79-4eed-93e2-4c879618de49/tasks/**)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)"
     ]
   }
 }

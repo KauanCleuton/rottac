@@ -12,8 +12,10 @@ const register = async (req, res, next) => {
 
     const hashed = await bcrypt.hash(password, 12);
 
+    const role = req.body.role === 'TEACHER' ? 'TEACHER' : 'STUDENT';
+
     const user = await prisma.user.create({
-      data: { name, email, password: hashed },
+      data: { name, email, password: hashed, role },
     });
 
     // Criar gamificação inicial
@@ -23,7 +25,7 @@ const register = async (req, res, next) => {
 
     return created(res, {
       token,
-      user: { id: user.id, name: user.name, email: user.email },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
     }, 'Conta criada com sucesso');
   } catch (err) {
     next(err);
