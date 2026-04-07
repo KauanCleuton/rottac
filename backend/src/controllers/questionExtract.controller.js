@@ -104,17 +104,17 @@ const extractConfirm = async (req, res, next) => {
     }
 
     const data = questions
-      .filter((q) => q.statement?.trim() && q.options?.A && q.options?.B && q.answer)
+      .filter((q) => q.statement?.trim())
       .map((q) => ({
         userId,
         subjectId: subjectId || null,
         statement: q.statement.trim(),
-        optionA: q.options.A.trim(),
-        optionB: q.options.B.trim(),
-        optionC: (q.options.C || '').trim(),
-        optionD: (q.options.D || '').trim(),
-        optionE: q.options.E ? q.options.E.trim() : null,
-        answer: q.answer.toUpperCase(),
+        optionA: (q.options?.A || '').trim(),
+        optionB: (q.options?.B || '').trim(),
+        optionC: (q.options?.C || '').trim(),
+        optionD: (q.options?.D || '').trim(),
+        optionE: q.options?.E ? q.options.E.trim() : null,
+        answer: q.answer ? q.answer.toUpperCase() : null,
         explanation: q.explanation?.trim() || null,
         banca: banca || null,
         year: year ? parseInt(year) : null,
@@ -142,13 +142,13 @@ const extractConfirm = async (req, res, next) => {
 // ─── GET /question-extract/list ───────────────────────────────────────────────
 const listQuestions = async (req, res, next) => {
   try {
-    const { subjectId, banca, page = '1', limit = '20' } = req.query;
+    const { subjectId, banca, page = '1', limit = '100' } = req.query;
     const userId = req.user.id;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const where = { userId };
     if (subjectId) where.subjectId = subjectId;
-    if (banca) where.banca = banca;
+    if (banca) where.banca = { contains: banca };
 
     const [questions, total] = await Promise.all([
       prisma.question.findMany({
@@ -177,7 +177,9 @@ const answerQuestion = async (req, res, next) => {
     const question = await prisma.question.findUnique({ where: { id } });
     if (!question) return res.status(404).json({ error: 'Questão não encontrada.' });
 
-    const isCorrect = selected.toUpperCase() === question.answer.toUpperCase();
+    const isCorrect = question.answer
+      ? selected.toUpperCase() === question.answer.toUpperCase()
+      : false; // questão sem gabarito — não conta como certa
 
     await prisma.questionAttempt.create({
       data: { questionId: id, userId, selected: selected.toUpperCase(), isCorrect, timeSpent: timeSpent || null },

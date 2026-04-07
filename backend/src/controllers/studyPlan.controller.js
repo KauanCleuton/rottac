@@ -145,12 +145,25 @@ const generateAutoSchedule = async (req, res, next) => {
 
     // ── Minutos disponíveis por dia ───────────────────────────────────────
     // Se o usuário tiver rotinas de ESTUDO, usa elas; senão assume 120 min/dia
+    // Calcula minutos disponíveis por dia da semana respeitando virada de meia-noite
+    const calcDuration = (startTime, endTime) => {
+      const [sh, sm] = (startTime || '00:00').split(':').map(Number);
+      const [eh, em] = (endTime || '00:00').split(':').map(Number);
+      const startMins = sh * 60 + sm;
+      const endMins = eh * 60 + em;
+      // Virada de meia-noite: ex. 20:00 → 00:00 = 240 min
+      return endMins <= startMins
+        ? (24 * 60 - startMins) + endMins
+        : endMins - startMins;
+    };
+
     const routineByDay = {};
     for (const r of user.routines || []) {
       if (r.type !== 'ESTUDO') continue;
-      const [sh, sm] = r.startTime.split(':').map(Number);
-      const [eh, em] = r.endTime.split(':').map(Number);
-      routineByDay[r.dayOfWeek] = (routineByDay[r.dayOfWeek] || 0) + (eh * 60 + em) - (sh * 60 + sm);
+      const duration = calcDuration(r.startTime, r.endTime);
+      if (duration > 0) {
+        routineByDay[r.dayOfWeek] = (routineByDay[r.dayOfWeek] || 0) + duration;
+      }
     }
     const hasRoutines = Object.keys(routineByDay).length > 0;
     const DEFAULT_DAILY_MINUTES = 120;

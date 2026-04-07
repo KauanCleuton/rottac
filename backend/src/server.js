@@ -36,6 +36,8 @@ const postSimuladoRoutes = require('./routes/postSimulado.routes');
 const dailyChallengeRoutes = require('./routes/dailyChallenge.routes');
 const flashcardFolderRoutes = require('./routes/flashcardFolder.routes');
 const questionExtractRoutes = require('./routes/questionExtract.routes');
+const essayRoutes = require('./routes/essay.routes');
+const teacherRoutes = require('./routes/teacher.routes');
 
 const { errorHandler } = require('./middlewares/errorHandler');
 
@@ -91,6 +93,8 @@ app.use(`${API}/post-simulado`, postSimuladoRoutes);
 app.use(`${API}/daily-challenge`, dailyChallengeRoutes);
 app.use(`${API}/flashcard-folders`, flashcardFolderRoutes);
 app.use(`${API}/question-extract`, questionExtractRoutes);
+app.use(`${API}/essays`, essayRoutes);
+app.use(`${API}/teacher`, teacherRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

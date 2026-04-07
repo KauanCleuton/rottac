@@ -676,20 +676,24 @@ def detect_question_format(text: str) -> str:
     Detecta o formato do PDF de questões:
       'inline'    — resposta/comentário logo após cada questão
       'commented' — seção GABARITO COMENTADO separada
-      'simple'    — só gabarito de letras no final
+      'simple'    — gabarito de letras no final (mais comum em concursos)
     """
     text_lower = text.lower()
     # Gabarito comentado como seção separada
     if re.search(r'gabarito\s+comentado', text_lower):
         return 'commented'
-    # Comentário/resolução inline (aparece frequentemente entre questões)
+    # Comentário/resolução inline (pelo menos 3 ocorrências)
     inline_count = len(re.findall(
-        r'\n\s*(?:resposta|comentário|resolução|gabarito)\s*[:\-–]', text_lower
+        r'\n\s*(?:resposta\s*(?:certa|correta)?|comentário|resolução)\s*[:\-–]', text_lower
     ))
     if inline_count >= 3:
         return 'inline'
-    # Gabarito simples (bloco de letras no final)
-    if re.search(r'gabarito', text_lower):
+    # Gabarito simples — palavra "gabarito" na segunda metade do texto
+    tail = text_lower[len(text_lower) // 2:]
+    if re.search(r'\bgabarito\b', tail):
+        return 'simple'
+    # Fallback: se há qualquer gabarito no texto
+    if re.search(r'\bgabarito\b', text_lower):
         return 'simple'
     return 'simple'
 
@@ -716,21 +720,20 @@ def extract_questions_from_text(text: str, fmt: str) -> list:
     gabarito_block = ""
     gabarito_comentado_block = ""
 
-    # Gabarito comentado
+    # Gabarito comentado — detecta "GABARITO COMENTADO" em qualquer posição
     m = re.search(r'\n\s*GABARITO\s+COMENTADO\b', text, re.IGNORECASE)
     if m:
         questions_block = text[:m.start()]
         gabarito_comentado_block = text[m.end():]
         fmt = 'commented'
     else:
-        # Gabarito simples — procura o bloco mais tarde no texto (últimos 25%)
-        m = re.search(r'\n\s*GABARITO\s*[\n:]', text, re.IGNORECASE)
-        if m and m.start() > len(text) * 0.5:
+        # Gabarito simples — aceita "GABARITO", "GABARITO DA PROVA", "GABARITO OFICIAL", etc.
+        # Exige que apareça depois de 30% do texto para evitar falso positivo
+        m = re.search(r'\n\s*GABARITO\b[^\n]*\n', text, re.IGNORECASE)
+        if m and m.start() > len(text) * 0.30:
             questions_block = text[:m.start()]
             gabarito_block = text[m.end():]
-            if fmt == 'inline':
-                fmt = 'inline'  # mantém inline mesmo com gabarito simples
-            else:
+            if fmt != 'inline':
                 fmt = 'simple'
 
     print(f"[extract] bloco questões: {len(questions_block)} chars | gabarito: {len(gabarito_block)} | comentado: {len(gabarito_comentado_block)}")
@@ -834,6 +837,7 @@ def parse_single_question(num: int, text: str, fmt: str) -> dict | None:
     if len(alt_matches) < 2:
         return None  # não tem alternativas suficientes
 
+    options = {}
 
     # Enunciado = tudo antes da primeira alternativa
     statement_end = alt_matches[0].start()
@@ -891,23 +895,52 @@ def parse_simple_gabarito(text: str) -> dict:
     """
     Parseia gabarito simples. Formatos aceitos:
       "1-C  2-A  3-D"
+      "1 – C  2 – A"        (en dash / em dash)
       "1. C   2. A"
-      "01 C   02 A"          (sem separador)
+      "01 C   02 A"          (só espaço)
       "1C 2A 3B"             (colado)
-      tabela com linhas "| 1 | C |"
+      tabela "| 1 | C |"
+      tabela alinhada:
+          01  02  03  04  05
+          C   A   B   D   E
     """
     answers = {}
 
-    # Formato com separador: "1-C", "1.C", "1) C", "01 - C"
-    for m in re.finditer(r'\b(0?[1-9]\d{0,2})\s*[-.):\s]\s*([A-Ea-e])\b', text):
-        num = int(m.group(1))
-        answers[num] = m.group(2).upper()
+    # ── Formato tabela alinhada: linha de números seguida de linha de letras ──
+    # Exemplo:
+    #   01  02  03  04  05
+    #   C   A   B   D   E
+    lines = text.split('\n')
+    for i in range(len(lines) - 1):
+        nums_line = lines[i].strip()
+        lets_line = lines[i + 1].strip()
+        nums = re.findall(r'\b(0?[1-9]\d{0,2})\b', nums_line)
+        lets = re.findall(r'\b([A-Ea-e])\b', lets_line)
+        # Deve haver números e o número de letras bate com os números
+        # e a linha de letras NÃO deve ter muitos números misturados
+        if nums and lets and len(nums) == len(lets) and len(nums) >= 3:
+            extra_nums = re.findall(r'\b\d+\b', lets_line)
+            if len(extra_nums) == 0:
+                for n, l in zip(nums, lets):
+                    answers[int(n)] = l.upper()
 
-    # Formato colado sem separador: "1C 2A 3B" (só se ainda não encontrou)
+    if answers:
+        return answers
+
+    # ── Formato com separador: "1-C", "1.C", "1) C", "01 – C", "01 — C" ──
+    sep = r'[\s\-–—.):(]+'   # qualquer combinação de espaços e separadores comuns
+    for m in re.finditer(r'\b(0?[1-9]\d{0,2})' + sep + r'([A-Ea-e])\b', text):
+        num = int(m.group(1))
+        # Evita capturar anos (ex: "2024 A" em contexto errado)
+        if 1 <= num <= 200:
+            answers[num] = m.group(2).upper()
+
+    # ── Formato colado "1C 2A 3B" ──
     if not answers:
         for m in re.finditer(r'\b(0?[1-9]\d{0,2})([A-Ea-e])\b', text):
             num = int(m.group(1))
-            answers[num] = m.group(2).upper()
+            if 1 <= num <= 200:
+                answers[num] = m.group(2).upper()
 
     return answers
 

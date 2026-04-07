@@ -62,8 +62,23 @@ model User {
   editalImports         EditalImport[]
   // Desafio Diário
   dailyChallenges       DailyChallenge[]
+  // Redação / Professor
+  role                  UserRole       @default(STUDENT)
+  essays                Essay[]        @relation("StudentEssays")
+  corrections           EssayCorrection[] @relation("TeacherCorrections")
+  essayComments         EssayComment[] @relation("EssayCommentAuthor")
+  teacherStudents       TeacherStudent[] @relation("TeacherStudents")
+  studentTeachers       TeacherStudent[] @relation("StudentTeachers")
+  sentInvites           TeacherInvite[] @relation("StudentInvites")
+  usedInvites           TeacherInvite[] @relation("TeacherUsedInvites")
+  feedbackTemplates     FeedbackTemplate[]
 
   @@map("users")
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
 }
 
 enum ExperienceLevel {
@@ -500,7 +515,7 @@ model Question {
   optionC     String    @db.Text
   optionD     String    @db.Text
   optionE     String?   @db.Text
-  answer      String    // "A"|"B"|"C"|"D"|"E"
+  answer      String?   // "A"|"B"|"C"|"D"|"E" — null se sem gabarito
   explanation String?   @db.Text
   banca       String?
   year        Int?
@@ -655,6 +670,8 @@ enum NotificationType {
   MISSAO
   MODO_GUERRA
   ENERGIA
+  REDACAO
+  PROFESSOR
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1054,6 +1071,144 @@ enum EditalStatus {
 // ═══════════════════════════════════════════════════════════════════════════
 // ─── DESAFIO DIÁRIO ─────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── SISTEMA DE REDAÇÃO COM PROFESSOR ───────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+model TeacherInvite {
+  id        String    @id @default(uuid())
+  studentId String
+  token     String    @unique @default(uuid())
+  expiresAt DateTime
+  usedAt    DateTime?
+  teacherId String?
+  createdAt DateTime  @default(now())
+
+  student   User      @relation("StudentInvites",     fields: [studentId], references: [id], onDelete: Cascade)
+  teacher   User?     @relation("TeacherUsedInvites", fields: [teacherId], references: [id])
+
+  @@map("teacher_invites")
+}
+
+model TeacherStudent {
+  id        String   @id @default(uuid())
+  teacherId String
+  studentId String
+  isActive  Boolean  @default(true)
+  linkedAt  DateTime @default(now())
+
+  teacher   User     @relation("TeacherStudents", fields: [teacherId], references: [id], onDelete: Cascade)
+  student   User     @relation("StudentTeachers", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, studentId])
+  @@map("teacher_students")
+}
+
+model Essay {
+  id          String      @id @default(uuid())
+  studentId   String
+  title       String
+  theme       String?
+  content     String      @db.LongText
+  status      EssayStatus @default(PENDING)
+  wordCount   Int?
+  charCount   Int?
+  version     Int         @default(1)
+  parentId    String?
+  submittedAt DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  student     User             @relation("StudentEssays", fields: [studentId], references: [id], onDelete: Cascade)
+  corrections EssayCorrection[]
+  comments    EssayComment[]
+  parent      Essay?           @relation("EssayVersions", fields: [parentId], references: [id])
+  versions    Essay[]          @relation("EssayVersions")
+
+  @@index([studentId, status])
+  @@map("essays")
+}
+
+enum EssayStatus {
+  PENDING
+  UNDER_REVIEW
+  CORRECTED
+  REWRITE_REQUESTED
+  REWRITTEN
+  ARCHIVED
+}
+
+model EssayCorrection {
+  id               String    @id @default(uuid())
+  essayId          String    @unique
+  teacherId        String
+  generalFeedback  String?   @db.Text
+  strengthPoints   String?   @db.Text   // pontos positivos
+  improvementPoints String?  @db.Text   // pontos a melhorar
+  // Critérios ENEM (0-200 cada = 0-1000 total)
+  scoreC1          Int?      // Competência 1: Domínio da norma culta
+  scoreC2          Int?      // Competência 2: Compreensão da proposta
+  scoreC3          Int?      // Competência 3: Seleção de argumentos
+  scoreC4          Int?      // Competência 4: Coesão e coerência
+  scoreC5          Int?      // Competência 5: Proposta de intervenção
+  totalScore       Int?      // soma automática 0-1000
+  audioUrl         String?   // áudio gravado pelo professor
+  correctedFileUrl String?   // PDF corrigido
+  requestRewrite   Boolean   @default(false)
+  rewriteDeadline  DateTime?
+  correctedAt      DateTime  @default(now())
+
+  essay    Essay          @relation(fields: [essayId],   references: [id], onDelete: Cascade)
+  teacher  User           @relation("TeacherCorrections", fields: [teacherId], references: [id])
+  comments EssayComment[]
+
+  @@map("essay_corrections")
+}
+
+model EssayComment {
+  id           String      @id @default(uuid())
+  essayId      String
+  correctionId String?
+  authorId     String
+  text         String      @db.Text
+  selectedText String?     @db.Text   // trecho do texto selecionado
+  startOffset  Int?                   // posição inicial no conteúdo
+  endOffset    Int?                   // posição final
+  type         CommentType @default(ANNOTATION)
+  isResolved   Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+
+  essay      Essay            @relation(fields: [essayId], references: [id], onDelete: Cascade)
+  correction EssayCorrection? @relation(fields: [correctionId], references: [id])
+  author     User             @relation("EssayCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([essayId])
+  @@map("essay_comments")
+}
+
+enum CommentType {
+  ANNOTATION   // anotação geral
+  GRAMMAR      // erro gramatical
+  COHESION     // coesão/coerência
+  ARGUMENT     // argumentação fraca
+  SUGGESTION   // sugestão de melhoria
+  PRAISE       // elogio / ponto positivo
+}
+
+model FeedbackTemplate {
+  id        String   @id @default(uuid())
+  teacherId String
+  title     String
+  content   String   @db.Text
+  category  String?  // "gramatica", "coesao", "argumento", etc.
+  usageCount Int     @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("feedback_templates")
+}
 
 model DailyChallenge {
   id            String      @id @default(uuid())
