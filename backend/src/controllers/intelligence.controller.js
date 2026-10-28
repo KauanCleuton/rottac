@@ -249,22 +249,42 @@ async function generateTodayPlan(userId, date) {
     activeMissions: missionsActive.map((m) => ({ id: m.id, type: m.type, title: m.title })),
   };
 
+  // Fallback: se o serviço de IA não estiver rodando, usa as tarefas reais do plano ativo
+  const fallbackPlan = tasks.map((t) => ({
+    id: t.id,          // ID real da StudyTask — usado para sincronizar ao completar
+    taskId: t.id,
+    title: t.title,
+    type: t.type,
+    estimatedMinutes: t.estimatedMinutes,
+    subject: t.topic?.name,
+    done: t.isCompleted,
+    completedAt: t.completedAt || null,
+  }));
+
   const decision = await fetch(`${INTEL_SERVICE}/decide/today`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).then((r) => r.json()).catch(() => ({ plan: [] }));
+  }).then((r) => r.json()).catch(() => ({ plan: null }));
+
+  // Se o serviço retornou itens, adiciona taskId quando o título coincide com uma StudyTask
+  let finalPlan = decision?.plan?.length
+    ? decision.plan.map((item) => {
+        const match = tasks.find((t) => t.id === item.id || t.title === item.title);
+        return { ...item, taskId: match?.id || null, done: match?.isCompleted || item.done || false };
+      })
+    : fallbackPlan;
 
   const saved = await prisma.dailyIntelligencePlan.upsert({
     where: { userId_date: { userId, date } },
     create: {
       userId,
       date,
-      plan: decision.plan || [],
+      plan: finalPlan,
       dayMode: (profile?.activeMode) || 'NORMAL',
     },
     update: {
-      plan: decision.plan || [],
+      plan: finalPlan,
       replans: [],
       status: 'GERADO',
       dayMode: (profile?.activeMode) || 'NORMAL',
@@ -363,6 +383,7 @@ const completeAction = async (req, res, next) => {
     if (!plan) return res.status(404).json({ error: 'Plano nao encontrado' });
 
     const items = Array.isArray(plan.plan) ? plan.plan : [];
+    const completedItem = items.find((i) => i.id === itemId);
     const updated = items.map((item) =>
       item.id === itemId ? { ...item, done: true, completedAt: new Date() } : item
     );
@@ -377,6 +398,20 @@ const completeAction = async (req, res, next) => {
         executionScore: allDone ? 100 : Math.round((updated.filter((i) => i.done).length / updated.length) * 100),
       },
     });
+
+    // Sincroniza com StudyTask real (quando o item tem taskId)
+    const taskId = completedItem?.taskId || completedItem?.id;
+    if (taskId) {
+      await prisma.studyTask.updateMany({
+        where: { id: taskId, studyPlan: { userId } },
+        data: { isCompleted: true, completedAt: new Date() },
+      });
+      // XP de gamificação
+      await prisma.gamification.updateMany({
+        where: { userId },
+        data: { xp: { increment: 10 } },
+      });
+    }
 
     // Registra evento comportamental
     await prisma.behaviorEvent.create({

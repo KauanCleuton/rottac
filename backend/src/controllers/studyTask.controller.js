@@ -4,7 +4,7 @@ const { success, created, notFound } = require('../utils/response');
 const completeTask = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { actualMinutes } = req.body;
+    const { actualMinutes } = req.body || {};
 
     const task = await prisma.studyTask.findFirst({
       where: { id, studyPlan: { userId: req.user.id } },

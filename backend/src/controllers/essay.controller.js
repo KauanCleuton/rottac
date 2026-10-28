@@ -275,17 +275,18 @@ const acceptInvite = async (req, res, next) => {
     const { token } = req.body;
     const teacherId = req.user.id;
 
+    // Primeiro valida sem modificar
     const invite = await prisma.teacherInvite.findUnique({ where: { token } });
     if (!invite) return res.status(404).json({ error: 'Convite não encontrado.' });
-    if (invite.usedAt) return res.status(400).json({ error: 'Convite já utilizado.' });
     if (invite.expiresAt < new Date()) return res.status(400).json({ error: 'Convite expirado.' });
     if (invite.studentId === teacherId) return res.status(400).json({ error: 'Você não pode se convidar.' });
 
-    // Marca convite como usado
-    await prisma.teacherInvite.update({
-      where: { token },
+    // Marca convite como usado atomicamente — updateMany retorna count=0 se já foi usado
+    const { count } = await prisma.teacherInvite.updateMany({
+      where: { token, usedAt: null },
       data: { usedAt: new Date(), teacherId },
     });
+    if (count === 0) return res.status(400).json({ error: 'Convite já utilizado.' });
 
     // Atualiza role para TEACHER
     await prisma.user.update({ where: { id: teacherId }, data: { role: 'TEACHER' } });

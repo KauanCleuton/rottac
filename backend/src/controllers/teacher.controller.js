@@ -116,22 +116,32 @@ const listStudents = async (req, res, next) => {
       orderBy: { linkedAt: 'desc' },
     });
 
-    const students = await Promise.all(
-      links.map(async (l) => {
-        const lastScore = await prisma.essayCorrection.findFirst({
-          where: { essay: { studentId: l.student.id } },
-          orderBy: { correctedAt: 'desc' },
-          select: { totalScore: true, correctedAt: true },
-        });
-        return {
-          ...l.student,
-          linkedAt: l.linkedAt,
-          lastScore: lastScore?.totalScore,
-          lastCorrectedAt: lastScore?.correctedAt,
-          pendingEssays: l.student.essays.filter((e) => e.status === 'PENDING' || e.status === 'REWRITTEN').length,
-        };
-      })
-    );
+    const studentIds = links.map((l) => l.student.id);
+
+    // Busca todas as correções dos alunos de uma vez (evita N+1)
+    const allCorrections = await prisma.essayCorrection.findMany({
+      where: { essay: { studentId: { in: studentIds } } },
+      orderBy: { correctedAt: 'desc' },
+      select: { totalScore: true, correctedAt: true, essay: { select: { studentId: true } } },
+    });
+
+    // Mapeia studentId → última correção (já vem ordenado desc)
+    const lastScoreMap = {};
+    for (const c of allCorrections) {
+      const sid = c.essay.studentId;
+      if (!lastScoreMap[sid]) lastScoreMap[sid] = { totalScore: c.totalScore, correctedAt: c.correctedAt };
+    }
+
+    const students = links.map((l) => {
+      const lastScore = lastScoreMap[l.student.id];
+      return {
+        ...l.student,
+        linkedAt: l.linkedAt,
+        lastScore: lastScore?.totalScore,
+        lastCorrectedAt: lastScore?.correctedAt,
+        pendingEssays: l.student.essays.filter((e) => e.status === 'PENDING' || e.status === 'REWRITTEN').length,
+      };
+    });
 
     return success(res, students);
   } catch (err) {

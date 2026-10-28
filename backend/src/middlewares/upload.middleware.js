@@ -8,7 +8,9 @@ const createStorage = (folder) =>
   multer.diskStorage({
     destination: (req, file, cb) => {
       const userId = req.user?.id || 'anonymous';
-      const subjectId = req.body?.subjectId || req.query?.subjectId || '_geral';
+      // path.basename previne path traversal (../../etc)
+      const rawSubjectId = req.body?.subjectId || req.query?.subjectId || '_geral';
+      const subjectId = path.basename(String(rawSubjectId)).replace(/[^a-zA-Z0-9_-]/g, '_') || '_geral';
       const dir = path.join(__dirname, '../../uploads', folder, userId, subjectId);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       cb(null, dir);

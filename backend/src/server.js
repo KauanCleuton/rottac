@@ -39,6 +39,7 @@ const questionExtractRoutes = require('./routes/questionExtract.routes');
 const essayRoutes = require('./routes/essay.routes');
 const teacherRoutes = require('./routes/teacher.routes');
 
+const rateLimit = require('express-rate-limit');
 const { errorHandler } = require('./middlewares/errorHandler');
 
 const app = express();
@@ -58,6 +59,22 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// ─── Rate limiting ────────────────────────────────────────────────────────
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 20,
+  message: { error: 'Muitas tentativas. Aguarde 15 minutos.' },
+  standardHeaders: true, legacyHeaders: false,
+});
+
+const generalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 min
+  max: 200,
+  message: { error: 'Muitas requisições. Tente novamente em breve.' },
+  standardHeaders: true, legacyHeaders: false,
+});
+
 // Servir uploads estaticamente
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
@@ -65,12 +82,14 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 const API = '/api/v1';
 
-app.use(`${API}/auth`, authRoutes);
+app.use(`${API}/auth`, authLimiter, authRoutes);
+app.use(`${API}`, generalLimiter);
 app.use(`${API}/users`, userRoutes);
 app.use(`${API}/subjects`, subjectRoutes);
 app.use(`${API}/study-plans`, studyPlanRoutes);
 app.use(`${API}/study-tasks`, studyTaskRoutes);
 app.use(`${API}/goals`, goalRoutes);
+app.use(`${API}/flashcards/extract`, flashcardExtractRoutes);
 app.use(`${API}/flashcards`, flashcardRoutes);
 app.use(`${API}/notes`, noteRoutes);
 app.use(`${API}/mind-maps`, mindMapRoutes);
@@ -88,7 +107,6 @@ app.use(`${API}/behavior`, behaviorRoutes);
 app.use(`${API}/missions`, missionRoutes);
 app.use(`${API}/mentoring`, mentoringRoutes);
 app.use(`${API}/edital`, editalRoutes);
-app.use(`${API}/flashcards/extract`, flashcardExtractRoutes);
 app.use(`${API}/post-simulado`, postSimuladoRoutes);
 app.use(`${API}/daily-challenge`, dailyChallengeRoutes);
 app.use(`${API}/flashcard-folders`, flashcardFolderRoutes);
