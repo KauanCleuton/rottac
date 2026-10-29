@@ -384,6 +384,14 @@ const useTemplate = async (req, res, next) => {
 const resolveComment = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const teacherId = req.user.id;
+    const comment = await prisma.essayComment.findFirst({
+      where: {
+        id,
+        essay: { student: { studentTeachers: { some: { teacherId, isActive: true } } } },
+      },
+    });
+    if (!comment) return notFound(res, 'Comentário não encontrado');
     await prisma.essayComment.update({ where: { id }, data: { isResolved: true } });
     return success(res, { ok: true });
   } catch (err) {

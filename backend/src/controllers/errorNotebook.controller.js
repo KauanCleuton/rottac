@@ -1,4 +1,5 @@
 const prisma = require('../utils/prisma');
+const questionReview = require('../services/questionReview');
 const { success, created, notFound } = require('../utils/response');
 const fs = require('fs');
 const path = require('path');
@@ -175,6 +176,17 @@ const reviewEntry = async (req, res, next) => {
       where: { id, userId: req.user.id },
     });
     if (!entry) return notFound(res, 'Registro não encontrado');
+
+    // Registro automático de questão do banco: usa a revisão espaçada da própria questão
+    if (entry.questionId) {
+      const question = await prisma.question.findUnique({ where: { id: entry.questionId } });
+      if (question) {
+        const review = await questionReview.applyAnswer({
+          userId: req.user.id, question, isCorrect: result === 'ACERTOU', fromErrorNotebook: true,
+        });
+        return success(res, { result, review }, 'Revisão registrada');
+      }
+    }
 
     // Calcular próxima revisão (revisão espaçada simples)
     const intervals = {

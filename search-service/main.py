@@ -10,12 +10,20 @@ Porta: 3003
 
 import asyncio
 import re
+import sys
 import unicodedata
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from duckduckgo_search import DDGS
+
+# No Windows a saída redirecionada usa cp1252; um print com "→" derrubava a extração
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # Importa o motor de inteligência
 from intelligence_engine import (
@@ -663,10 +671,10 @@ async def extract_questions(file: UploadFile = FastAPIFile(...)):
         print(f"[/extract-questions] Formato detectado: {fmt}")
 
         # ── Extrai questões ────────────────────────────────────────────────
-        questions = extract_questions_from_text(text, fmt)
-        print(f"[/extract-questions] {len(questions)} questões extraídas")
+        questions, texts = extract_questions_and_texts(text, fmt)
+        print(f"[/extract-questions] {len(questions)} questões extraídas, {len(texts)} textos de apoio")
 
-        return {"questions": questions, "format": fmt, "total": len(questions)}
+        return {"questions": questions, "texts": texts, "format": fmt, "total": len(questions)}
     finally:
         os.unlink(tmp_path)
 
@@ -711,7 +719,97 @@ def clean_text_for_extraction(text: str) -> str:
     return text
 
 
-def extract_questions_from_text(text: str, fmt: str) -> list:
+TEXT_MARKER_RE = re.compile(
+    r'(?:^|\n)[ \t]*('
+    r'(?:TEXTO|Texto)[ \t]+(?:[IVXLC]{1,6}|\d{1,2})\b[^\n]*'
+    r'|(?:Leia|Considere|Observe|Analise)[ \t]+(?:atentamente[ \t]+)?o[ \t]+(?:texto|fragmento|trecho)[^\n]*'
+    r'|(?:TEXTO|Texto)[ \t]+(?:para|associado|base|de apoio)[^\n]*'
+    r'|TEXTO[ \t]*(?=\n)'
+    r')'
+)
+NEXT_QUESTION_RE = re.compile(
+    r'(?:^|\n)[ \t]{0,4}(?:quest[aã]o[ \t]*(?:n[ºo°.]?[ \t]*)?(\d{1,3})\b|(0?[1-9]\d{0,2})[ \t]*[.):\-–][ \t])',
+    re.IGNORECASE,
+)
+RANGE_RE = re.compile(r'quest(?:ões|oes)\s*(?:de\s*)?(\d{1,3})\s*(?:a|à|até|ate|e|-|–)\s*(\d{1,3})', re.IGNORECASE)
+SOURCE_RE = re.compile(r'^\s*(?:\(?\s*(?:Fonte|Disponível em|Disponivel em|Adaptado de|Extraído de|Extraido de)\b.*|\(.{8,200}\)\s*\.?)\s*$', re.IGNORECASE)
+
+
+def extract_support_texts(block: str):
+    """
+    Encontra textos de apoio ("Texto I", "Leia o texto...") entre as questões.
+    Retorna (bloco_sem_textos, textos) onde cada texto tem: key, title, body, source,
+    range (de, até) citado ou None, e firstQuestion (número da questão que vem logo depois).
+    """
+    texts = []
+    cuts = []
+    for m in TEXT_MARKER_RE.finditer(block):
+        start = m.start(1)
+        if any(a <= start < b for a, b in cuts):
+            continue
+        nxt = NEXT_QUESTION_RE.search(block, m.end(1))
+        if not nxt:
+            continue
+        end = nxt.start()
+        span = block[start:end].strip()
+        lines = span.split('\n')
+        if len(span) < 60:
+            continue
+        # Trecho com alternativas é enunciado de questão, não texto de apoio
+        if find_alternatives(lines, 'ABCDE') and len(find_alternatives(lines, 'ABCDE')) >= 2:
+            continue
+        marker = lines[0].strip()
+        body_lines = lines[1:]
+        rng = RANGE_RE.search(marker) or RANGE_RE.search(' '.join(body_lines[:2]))
+        # "Leia o texto..." seguido de "TEXTO I" na linha de baixo: o título é o "TEXTO I"
+        if body_lines and re.match(r'\s*(?:TEXTO|Texto)[ \t]+(?:[IVXLC]{1,6}|\d{1,2})\s*$', body_lines[0]):
+            marker = body_lines.pop(0).strip()
+        source = None
+        while body_lines and not body_lines[-1].strip():
+            body_lines.pop()
+        if body_lines and SOURCE_RE.match(body_lines[-1]):
+            source = body_lines.pop().strip().strip('()').strip()
+        body = reflow('\n'.join(body_lines)).strip()
+        if len(body) < 40:
+            continue
+        title_m = re.match(r'(?:TEXTO|Texto)[ \t]+([IVXLC]{1,6}|\d{1,2})\b', marker)
+        title = f'Texto {title_m.group(1)}' if title_m else ('Texto' if len(marker) > 60 else marker[:120])
+        first_q = int(nxt.group(1) or nxt.group(2))
+        texts.append({
+            'key': f't{len(texts) + 1}',
+            'title': title,
+            'body': body[:60000],
+            'source': source,
+            'range': [int(rng.group(1)), int(rng.group(2))] if rng else None,
+            'firstQuestion': first_q,
+        })
+        cuts.append((start, end))
+
+    cleaned = block
+    for a, b in sorted(cuts, reverse=True):
+        cleaned = cleaned[:a] + '\n' + cleaned[b:]
+    return cleaned, texts
+
+
+def assign_texts(questions: list, texts: list):
+    """Liga cada questão ao texto: pelo intervalo citado ou, na falta dele, até o próximo texto."""
+    ordered = sorted(texts, key=lambda t: t['firstQuestion'])
+    for q in questions:
+        n = q['number']
+        for t in ordered:
+            if t['range'] and t['range'][0] <= n <= t['range'][1]:
+                q['textKey'] = t['key']
+                break
+        else:
+            for i, t in enumerate(ordered):
+                if t['range']:
+                    continue
+                nxt = next((o['firstQuestion'] for o in ordered[i + 1:]), 10 ** 6)
+                if t['firstQuestion'] <= n < nxt:
+                    q['textKey'] = t['key']
+
+
+def extract_questions_and_texts(text: str, fmt: str) -> tuple:
     """Extrai questões baseado no formato detectado."""
     text = clean_text_for_extraction(text)
 
@@ -738,6 +836,11 @@ def extract_questions_from_text(text: str, fmt: str) -> list:
 
     print(f"[extract] bloco questões: {len(questions_block)} chars | gabarito: {len(gabarito_block)} | comentado: {len(gabarito_comentado_block)}")
 
+    # ── Textos de apoio (saem do bloco antes de dividir em questões) ──────
+    questions_block, support_texts = extract_support_texts(questions_block)
+    if support_texts:
+        print(f"[extract] textos de apoio: {len(support_texts)}")
+
     # ── Divide em blocos de questão ───────────────────────────────────────
     raw_questions = split_into_questions(questions_block)
     print(f"[extract] blocos brutos: {len(raw_questions)}")
@@ -749,6 +852,32 @@ def extract_questions_from_text(text: str, fmt: str) -> list:
         q = parse_single_question(num, q_text, fmt)
         if q:
             questions.append(q)
+
+    # ── Prova Certo/Errado (Cebraspe): itens sem alternativas ─────────────
+    ce_answers = parse_simple_gabarito(gabarito_block) if gabarito_block else {}
+    # Cebraspe numera itens sem pontuação ("1 A administração..."): tenta separador tolerante
+    ce_blocks = split_items_relaxed(questions_block)
+    if len(ce_blocks) <= len(raw_questions):
+        ce_blocks = raw_questions
+    if is_certo_errado_exam(text, ce_blocks, questions, ce_answers):
+        fmt = 'certo_errado'
+        questions = []
+        for num, q_text in ce_blocks:
+            statement = re.split(r'\n\s*(?:gabarito|resposta)\s*[:\-–]', q_text, flags=re.IGNORECASE)[0].strip()
+            if len(statement) < 10:
+                continue
+            ans = ce_answers.get(num, '')
+            questions.append({
+                'number': num,
+                'type': 'CERTO_ERRADO',
+                'statement': statement[:5000],
+                'options': {},
+                'answer': ans if ans in ('C', 'E') else '',
+                'explanation': '',
+            })
+        print(f"[extract] prova certo/errado: {len(questions)} itens")
+        assign_texts(questions, support_texts)
+        return questions, support_texts
 
     print(f"[extract] questões parseadas: {len(questions)} | sem alternativas descartadas: {len(raw_questions)-len(questions)}")
 
@@ -769,40 +898,100 @@ def extract_questions_from_text(text: str, fmt: str) -> list:
                 q['answer'] = commented[q['number']].get('answer', q.get('answer', ''))
                 q['explanation'] = commented[q['number']].get('explanation', '')
 
-    return questions
+    assign_texts(questions, support_texts)
+    return questions, support_texts
+
+
+def extract_questions_from_text(text: str, fmt: str) -> list:
+    """Compatibilidade: só as questões (use extract_questions_and_texts para os textos de apoio)."""
+    return extract_questions_and_texts(text, fmt)[0]
+
+def split_items_relaxed(text: str) -> list:
+    """Divide itens numerados como "12 Texto do item" (número + espaço + maiúscula),
+    exigindo numeração crescente para não confundir com números soltos no texto."""
+    pattern = re.compile(r'(?:^|\n) {0,4}(\d{1,3})\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ(])')
+    valid = []
+    last_num = 0
+    for m in pattern.finditer(text):
+        num = int(m.group(1))
+        if 0 < num - last_num <= 5:
+            valid.append((num, m))
+            last_num = num
+    blocks = []
+    for i, (num, m) in enumerate(valid):
+        end = valid[i + 1][1].start() if i + 1 < len(valid) else len(text)
+        block = text[m.end():end].strip()
+        if len(block) > 15:
+            blocks.append((num, block))
+    return blocks
+
+
+def is_certo_errado_exam(text: str, raw_blocks: list, parsed: list, answers: dict) -> bool:
+    """Heurística: a maioria dos blocos não tem alternativas E (o gabarito só tem C/E
+    OU o texto usa o comando típico do Cebraspe)."""
+    if not raw_blocks or len(parsed) > len(raw_blocks) * 0.3:
+        return False
+    letters = set(answers.values())
+    gabarito_ce = bool(letters) and letters <= {'C', 'E'}
+    comando = re.search(r'julgue\s+(?:os\s+)?(?:itens|item)|certo\s+ou\s+errado|cebraspe|cespe', text, re.IGNORECASE)
+    return gabarito_ce or bool(comando)
+
+
+HEADER_RE = re.compile(
+    r'(?:^|\n)[ \t]{0,4}quest[aã]o[ \t]*(?:n[ºo°.]?[ \t]*)?(\d{1,3})\b[^\n]*',
+    re.IGNORECASE,
+)
 
 
 def split_into_questions(text: str) -> list:
     """
     Divide o texto em blocos por número de questão.
-    Cobre: "1." "1)" "01." "01)" "Questão 1" "QUESTÃO 01" "1 -" "1 –"
-    O número deve aparecer no início da linha (com até 4 espaços de indent).
+    1º tenta cabeçalhos "QUESTÃO 01 (BANCA / ANO / ...)" — comuns em apostilas;
+    o resto da linha do cabeçalho fica no início do bloco (metadados).
+    Depois cobre: "1." "1)" "01." "01)" "1 -" "1 –" no início da linha.
     """
+    headers = [m for m in HEADER_RE.finditer(text)]
+    valid_headers = []
+    last = 0
+    for m in headers:
+        num = int(m.group(1))
+        if 0 < num - last <= 5 or (last == 0 and num <= 10):
+            valid_headers.append((num, m))
+            last = num
+    if len(valid_headers) >= 2:
+        blocks = []
+        for i, (num, m) in enumerate(valid_headers):
+            # mantém o resto da linha do cabeçalho (ex.: "(IBADE / 2026 / ...)")
+            header_rest = m.group(0).strip()
+            header_rest = re.sub(r'^quest[aã]o[ \t]*(?:n[ºo°.]?[ \t]*)?\d{1,3}\b[ \t]*[.):\-–]?[ \t]*', '', header_rest, flags=re.IGNORECASE)
+            end = valid_headers[i + 1][1].start() if i + 1 < len(valid_headers) else len(text)
+            body = text[m.end():end].strip()
+            block_text = (header_rest + '\n' + body) if header_rest else body
+            if len(body) > 15:
+                blocks.append((num, block_text))
+        return blocks
+
     pattern = re.compile(
         r'(?:^|\n) {0,4}'                        # início de linha, até 4 espaços
-        r'(?:quest[aã]o\s*n?[oº°]?\s*)?'         # "Questão" / "Questão nº" opcional
         r'(0?[1-9]\d{0,2})'                       # número: 1-999, com zero à esquerda opcional
         r'\s*[.):\-–]\s',                          # separador: ) . : - –
-        re.IGNORECASE | re.MULTILINE
+        re.MULTILINE
     )
 
     matches = list(pattern.finditer(text))
     if not matches:
         return []
 
-    # Filtra sequências que parecem ser alternativas (A, B, C, D, E soltos)
-    # e garante que os números são consecutivos (evita pegar anos como "2024.")
+    # Garante números consecutivos (evita pegar anos como "2024.")
     valid = []
     last_num = 0
     for m in matches:
         num = int(m.group(1))
-        # Aceita se for consecutivo ou próximo (±5) do último — evita pegar datas
         if num == 1 or (0 < num - last_num <= 5) or (last_num == 0 and num <= 10):
             valid.append((num, m))
             last_num = num
 
     if not valid:
-        # Fallback: aceita todos sem filtro de consecutividade
         valid = [(int(m.group(1)), m) for m in matches]
 
     blocks = []
@@ -816,78 +1005,148 @@ def split_into_questions(text: str) -> list:
     return blocks
 
 
+LIST_ITEM = re.compile(r'^\s*(?:[IVX]{1,5}\s*[.)\-–]|\(?[a-e]\)|\d{1,2}[.)]|[-•–])\s')
+
+
+def reflow(text: str) -> str:
+    """Desfaz quebras de linha do PDF no meio das frases, preservando itens (I., II., a), -)."""
+    text = re.sub(r'(\w)-\s+-(\w)', r'\1-\2', text)  # "pré- -escolas" -> "pré-escolas"
+    out = []
+    for line in text.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        if out and not LIST_ITEM.match(line) and not re.search(r'[.:;?!]$', out[-1]):
+            out[-1] += ' ' + line
+        else:
+            out.append(line)
+    return '\n'.join(out)
+
+
+def parse_header_meta(text: str) -> tuple[dict, str]:
+    """Extrai "(BANCA / ANO / CARGO / ÓRGÃO / ÁREA)" da primeira linha do bloco."""
+    first, _, rest = text.partition('\n')
+    first = first.strip()
+    if not (first.startswith('(') and first.endswith(')') and ' / ' in first):
+        return {}, text
+    parts = [p.strip() for p in first[1:-1].split(' / ')]
+    meta = {}
+    year_idx = next((i for i, p in enumerate(parts) if re.fullmatch(r'(19|20)\d{2}', p)), None)
+    if year_idx is not None:
+        meta['banca'] = ' / '.join(parts[:year_idx]) or None
+        meta['year'] = int(parts[year_idx])
+        tail = parts[year_idx + 1:]
+        if len(tail) >= 2:
+            meta['cargo'] = tail[0] + (f' — {tail[2]}' if len(tail) > 2 else '')
+            meta['orgao'] = tail[1]
+        elif tail:
+            meta['cargo'] = tail[0]
+    else:
+        meta['banca'] = parts[0]
+    return {k: v for k, v in meta.items() if v}, rest
+
+
+def find_alternatives(lines: list, letters: str):
+    """
+    Localiza as alternativas exigindo ordem A, B, C... Como enunciados podem começar
+    com o artigo "A ...", a alternativa A é a ÚLTIMA linha com "A" antes do primeiro "B".
+    Retorna lista de (letra, índice_da_linha, texto_da_primeira_linha) ou [].
+    """
+    def cands(letter):
+        pat = re.compile(r'^\s{0,6}\(?' + letter + r'\)?(?:\s*[.):\-–]\s*|\s+)(?=\S)(.*)$')
+        out = []
+        for i, line in enumerate(lines):
+            m = pat.match(line)
+            if m:
+                out.append((i, m.group(1)))
+        return out
+
+    a_c, b_c = cands(letters[0]), cands(letters[1])
+    for b_idx, b_txt in b_c:
+        a_before = [c for c in a_c if c[0] < b_idx]
+        if not a_before:
+            continue
+        a_idx, a_txt = a_before[-1]
+        seq = [(letters[0].upper(), a_idx, a_txt), (letters[1].upper(), b_idx, b_txt)]
+        for letter in letters[2:]:
+            nxt = [c for c in cands(letter) if c[0] > seq[-1][1]]
+            if not nxt:
+                break
+            seq.append((letter.upper(), nxt[0][0], nxt[0][1]))
+        return seq
+    return []
+
+
+ANSWER_MARK = re.compile(r'\n\s*(?:resposta|coment[aá]rio|resolu[cç][aã]o|gabarito)\s*[:\-–]', re.IGNORECASE)
+
+
 def parse_single_question(num: int, text: str, fmt: str) -> dict | None:
-    """Parseia uma questão individual extraindo enunciado, alternativas e resposta inline."""
+    """Parseia uma questão: metadados do cabeçalho, enunciado, alternativas, resposta inline."""
+    meta, text = parse_header_meta(text)
+    lines = text.split('\n')
 
-    # ── Detecta alternativas ──────────────────────────────────────────────
-    # Cobre: "A)" "(A)" "A." "A -" "a)" — sempre no início da linha
-    alt_pattern = re.compile(
-        r'(?:^|\n) {0,6}'           # início de linha
-        r'\(?([A-Ea-e])\)?'         # letra: A, (A), a
-        r'[\s.):\-–]{1,3}'          # separador
-        r'(.+?)'                    # conteúdo da alternativa
-        r'(?='                      # lookahead: próxima alternativa ou fim
-        r'\n {0,6}\(?[A-Ea-e]\)?[\s.):\-–]'
-        r'|\n\n|\Z)',
-        re.DOTALL
-    )
+    # Maiúsculas primeiro (evita confundir continuação "e pré-escolas" com alternativa E)
+    seq = find_alternatives(lines, 'ABCDE') or find_alternatives(lines, 'abcde')
 
-    alt_matches = list(alt_pattern.finditer(text))
+    if len(seq) < 2:
+        # Item Certo/Errado no meio de prova de múltipla escolha
+        body = text.strip()
+        is_ce = re.search(r'^\s*CERTO\s*$', body, re.MULTILINE) and re.search(r'^\s*ERRADO\s*$', body, re.MULTILINE)
+        if is_ce or re.search(r'julgue\s+(?:o|os)\s+ite', body, re.IGNORECASE):
+            statement = re.sub(r'^\s*(CERTO|ERRADO)\s*$', '', body, flags=re.MULTILINE).strip()
+            statement = ANSWER_MARK.split('\n' + statement)[0].strip()
+            if len(statement) < 10:
+                return None
+            return {'number': num, 'type': 'CERTO_ERRADO', 'statement': reflow(statement)[:5000],
+                    'options': {}, 'answer': '', 'explanation': '', **meta}
+        return None
 
-    if len(alt_matches) < 2:
-        return None  # não tem alternativas suficientes
-
-    options = {}
-
-    # Enunciado = tudo antes da primeira alternativa
-    statement_end = alt_matches[0].start()
-    statement = text[:statement_end].strip()
+    statement = '\n'.join(lines[:seq[0][1]]).strip()
     statement = re.sub(r'^[\d.)\s]+', '', statement).strip()
-
     if len(statement) < 10:
         return None
 
-    # Captura alternativas
-    for m in alt_matches:
-        letter = m.group(1).upper()
-        content = m.group(2).strip()
-        # Remove texto de resposta inline que pode ter entrado na alternativa
-        content = re.split(r'\n\s*(?:resposta|comentário|resolução|gabarito)\s*[:\-–]', content, flags=re.IGNORECASE)[0].strip()
-        if letter in 'ABCDE':
-            options[letter] = content
+    options = {}
+    after_options = ''
+    for i, (letter, idx, first_txt) in enumerate(seq):
+        end = seq[i + 1][1] if i + 1 < len(seq) else len(lines)
+        content = '\n'.join([first_txt] + lines[idx + 1:end])
+        if i == len(seq) - 1:
+            parts = ANSWER_MARK.split(content, maxsplit=1)
+            if len(parts) > 1:
+                m = ANSWER_MARK.search(content)
+                after_options = content[m.start():]
+                content = parts[0]
+        options[letter] = reflow(content).replace('\n', ' ')
 
-    # ── Tenta capturar resposta e explicação após as alternativas ────────
+    # ── Resposta e explicação inline ────────────────────────────────────
     answer = ''
     explanation = ''
-    after_options = text[alt_matches[-1].end():].strip()
-
-    # Resposta inline: "Resposta: C" / "Gabarito: C" / "Resposta Certa: C"
     ans_m = re.search(
         r'(?:resposta\s*(?:certa|correta)?|gabarito)\s*[:\-–]?\s*\(?([A-Ea-e])\)?',
         after_options, re.IGNORECASE
     )
     if ans_m:
         answer = ans_m.group(1).upper()
-
-    # Explicação inline
     exp_m = re.search(
-        r'(?:comentário|resolução|explicação|justificativa)\s*[:\-–]\s*(.+?)(?=\n\n|\Z)',
+        r'(?:coment[aá]rio|resolu[cç][aã]o|explica[cç][aã]o|justificativa)\s*[:\-–]\s*(.+?)(?=\n\n|\Z)',
         after_options, re.IGNORECASE | re.DOTALL
     )
     if exp_m:
-        explanation = exp_m.group(1).strip()[:800]
-    elif answer and after_options and len(after_options) > 30:
-        # Tudo depois da resposta pode ser a explicação
-        rest = after_options[ans_m.end():].strip() if ans_m else ''
+        explanation = exp_m.group(1).strip()[:4000]
+    elif ans_m:
+        rest = after_options[ans_m.end():].strip()
         if len(rest) > 20:
-            explanation = rest[:800]
+            explanation = rest[:4000]
 
     return {
         'number': num,
-        'statement': statement[:1000],
+        'type': 'MULTIPLA_ESCOLHA',
+        'statement': reflow(statement)[:5000],
         'options': options,
         'answer': answer,
         'explanation': explanation,
+        **meta,
     }
 
 
@@ -905,6 +1164,10 @@ def parse_simple_gabarito(text: str) -> dict:
           C   A   B   D   E
     """
     answers = {}
+
+    # Itens Certo/Errado no gabarito ("19 CERTO") viram C/E
+    text = re.sub(r'\bCERTO\b', 'C', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bERRADO\b', 'E', text, flags=re.IGNORECASE)
 
     # ── Formato tabela alinhada: linha de números seguida de linha de letras ──
     # Exemplo:

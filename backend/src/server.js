@@ -38,11 +38,26 @@ const flashcardFolderRoutes = require('./routes/flashcardFolder.routes');
 const questionExtractRoutes = require('./routes/questionExtract.routes');
 const essayRoutes = require('./routes/essay.routes');
 const teacherRoutes = require('./routes/teacher.routes');
+const questionBankRoutes = require('./routes/questionBank.routes');
+const provasRoutes = require('./routes/provas.routes');
+const notebookRoutes = require('./routes/notebook.routes');
+const billingRoutes = require('./routes/billing.routes');
+const adminRoutes = require('./routes/admin.routes');
+const studyEditalRoutes = require('./routes/studyEdital.routes');
+const lawRoutes = require('./routes/law.routes');
+const examRoutes = require('./routes/exam.routes');
+const cycleRoutes = require('./routes/cycle.routes');
+const billing = require('./services/billing');
+const { requireFeature } = require('./middlewares/plan.middleware');
+const { authenticate } = require('./middlewares/auth.middleware');
 
 const rateLimit = require('express-rate-limit');
 const { errorHandler } = require('./middlewares/errorHandler');
 
 const app = express();
+
+// Atrás do proxy do Next/túnel: o IP real vem do X-Forwarded-For (só confia em saltos locais)
+app.set('trust proxy', 'loopback');
 
 // ─── Middlewares globais ───────────────────────────────────────────────────
 
@@ -86,11 +101,11 @@ app.use(`${API}/auth`, authLimiter, authRoutes);
 app.use(`${API}`, generalLimiter);
 app.use(`${API}/users`, userRoutes);
 app.use(`${API}/subjects`, subjectRoutes);
-app.use(`${API}/study-plans`, studyPlanRoutes);
+app.use(`${API}/study-plans`, authenticate, requireFeature('planoEstudos'), studyPlanRoutes);
 app.use(`${API}/study-tasks`, studyTaskRoutes);
 app.use(`${API}/goals`, goalRoutes);
 app.use(`${API}/flashcards/extract`, flashcardExtractRoutes);
-app.use(`${API}/flashcards`, flashcardRoutes);
+app.use(`${API}/flashcards`, authenticate, requireFeature('flashcards'), flashcardRoutes);
 app.use(`${API}/notes`, noteRoutes);
 app.use(`${API}/mind-maps`, mindMapRoutes);
 app.use(`${API}/pdfs`, pdfRoutes);
@@ -102,10 +117,10 @@ app.use(`${API}/analytics`, analyticsRoutes);
 app.use(`${API}/notifications`, notificationRoutes);
 app.use(`${API}/gamification`, gamificationRoutes);
 app.use(`${API}/emotions`, emotionRoutes);
-app.use(`${API}/intelligence`, intelligenceRoutes);
+app.use(`${API}/intelligence`, authenticate, requireFeature('inteligencia'), intelligenceRoutes);
 app.use(`${API}/behavior`, behaviorRoutes);
 app.use(`${API}/missions`, missionRoutes);
-app.use(`${API}/mentoring`, mentoringRoutes);
+app.use(`${API}/mentoring`, authenticate, requireFeature('mentoria'), mentoringRoutes);
 app.use(`${API}/edital`, editalRoutes);
 app.use(`${API}/post-simulado`, postSimuladoRoutes);
 app.use(`${API}/daily-challenge`, dailyChallengeRoutes);
@@ -113,6 +128,15 @@ app.use(`${API}/flashcard-folders`, flashcardFolderRoutes);
 app.use(`${API}/question-extract`, questionExtractRoutes);
 app.use(`${API}/essays`, essayRoutes);
 app.use(`${API}/teacher`, teacherRoutes);
+app.use(`${API}/question-bank`, questionBankRoutes);
+app.use(`${API}/provas`, authenticate, requireFeature('provasAnteriores'), provasRoutes);
+app.use(`${API}/notebooks`, notebookRoutes);
+app.use(`${API}/billing`, billingRoutes);
+app.use(`${API}/admin`, adminRoutes);
+app.use(`${API}/study-editais`, studyEditalRoutes);
+app.use(`${API}/laws`, lawRoutes);
+app.use(`${API}/exams`, examRoutes);
+app.use(`${API}/cycles`, cycleRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -123,6 +147,10 @@ app.get('/health', (req, res) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
+
+// Cria planos padrão e configurações na primeira execução
+billing.ensureDefaults().catch((e) => console.error('[billing] falha ao criar padrões:', e.message));
+require('./services/taxonomy').getTree().catch((e) => console.error('[assuntos] falha ao carregar a árvore:', e.message));
 
 app.listen(PORT, () => {
   console.log(`\n🚀 Aprova.AI Backend rodando na porta ${PORT}`);

@@ -2,7 +2,9 @@ const router = require('express').Router();
 const c = require('../controllers/teacher.controller');
 const { authenticate } = require('../middlewares/auth.middleware');
 
-router.use(authenticate);
+const { requireRole } = require('../middlewares/role.middleware');
+
+router.use(authenticate, requireRole('TEACHER'));
 
 // Dashboard e alunos
 router.get('/dashboard', c.getDashboard);

@@ -59,7 +59,7 @@ const uploadEdital = (req, res, next) => {
 const getStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const record = await prisma.editalImport.findUnique({ where: { id } });
+    const record = await prisma.editalImport.findFirst({ where: { id, userId: req.user.id } });
     if (!record) return res.status(404).json({ error: 'Importação não encontrada.' });
     return success(res, record);
   } catch (err) { next(err); }

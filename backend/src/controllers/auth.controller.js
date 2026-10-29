@@ -7,6 +7,12 @@ const register = async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
 
+    if (!name?.trim() || !email?.trim() || !password) {
+      return badRequest(res, 'Nome, email e senha são obrigatórios');
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return badRequest(res, 'Email inválido');
+    if (String(password).length < 8) return badRequest(res, 'A senha deve ter pelo menos 8 caracteres');
+
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) return badRequest(res, 'Email já cadastrado');
 
@@ -71,7 +77,7 @@ const me = async (req, res, next) => {
       include: { gamification: true },
     }) || {};
     const user = userRaw;
-    if (!user) return unauthorized(res, 'Usuário não encontrado');
+    if (!user.id) return unauthorized(res, 'Usuário não encontrado');
     return success(res, user);
   } catch (err) {
     next(err);

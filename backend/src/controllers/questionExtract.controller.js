@@ -3,6 +3,7 @@ const { success } = require('../utils/response');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const questionBank = require('./questionBank.controller');
 
 const PYTHON_SERVICE = process.env.INTELLIGENCE_SERVICE_URL || 'http://localhost:3003';
 
@@ -62,13 +63,14 @@ const extractPreview = (req, res, next) => {
         return res.status(422).json({
           error: 'Nenhuma questão detectada.',
           format: result.format,
-          hint: 'Verifique se o PDF contém questões numeradas com alternativas A) B) C) D) E).',
+          hint: 'Verifique se o PDF contém questões numeradas com alternativas A) B) C) D) E), ou itens Certo/Errado com gabarito.',
         });
       }
 
       // Normaliza para garantir que todas as questões tenham os campos necessários
       const questions = result.questions.map((q) => ({
         number: q.number,
+        type: q.type === 'CERTO_ERRADO' ? 'CERTO_ERRADO' : 'MULTIPLA_ESCOLHA',
         statement: q.statement || '',
         options: {
           A: q.options?.A || '',
@@ -79,11 +81,18 @@ const extractPreview = (req, res, next) => {
         },
         answer: q.answer || '',
         explanation: q.explanation || '',
+        // Metadados lidos do cabeçalho de cada questão (ex.: "QUESTÃO 01 (IBADE / 2026 / ...)")
+        banca: q.banca || null,
+        year: q.year || null,
+        orgao: q.orgao || null,
+        cargo: q.cargo || null,
+        textKey: q.textKey ?? null,
       }));
 
       return success(res, {
         total: questions.length,
         format: result.format,
+        texts: Array.isArray(result.texts) ? result.texts : [],
         questions,
       });
     } catch (e) {
@@ -94,109 +103,34 @@ const extractPreview = (req, res, next) => {
 };
 
 // ─── POST /question-extract/confirm ──────────────────────────────────────────
-const extractConfirm = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const { questions, subjectId, banca, year, source } = req.body;
-
-    if (!questions || questions.length === 0) {
-      return res.status(400).json({ error: 'Nenhuma questão enviada.' });
-    }
-
-    const data = questions
-      .filter((q) => q.statement?.trim())
-      .map((q) => ({
-        userId,
-        subjectId: subjectId || null,
-        statement: q.statement.trim(),
-        optionA: (q.options?.A || '').trim(),
-        optionB: (q.options?.B || '').trim(),
-        optionC: (q.options?.C || '').trim(),
-        optionD: (q.options?.D || '').trim(),
-        optionE: q.options?.E ? q.options.E.trim() : null,
-        answer: q.answer ? q.answer.toUpperCase() : null,
-        explanation: q.explanation?.trim() || null,
-        banca: banca || null,
-        year: year ? parseInt(year) : null,
-        source: source || null,
-        difficulty: 'MEDIO',
-      }));
-
-    await prisma.question.createMany({ data });
-
-    // XP por importar questões
-    await prisma.gamification.updateMany({
-      where: { userId },
-      data: { xp: { increment: data.length * 2 } },
-    });
-
-    return success(res, {
-      created: data.length,
-      message: `${data.length} questões importadas com sucesso!`,
-    });
-  } catch (err) {
-    next(err);
-  }
+// Reaproveita a validação do banco de questões: metadados do formulário viram defaults
+const extractConfirm = (req, res, next) => {
+  const { questions, subjectId, assuntoId, banca, year, source, discipline, topic, orgao, cargo, level, isPublic, texts } = req.body;
+  req.body = {
+    questions: (questions || []).map((q) => ({
+      type: q.type || 'MULTIPLA_ESCOLHA',
+      statement: q.statement,
+      options: q.type === 'CERTO_ERRADO' ? undefined : q.options,
+      answer: q.answer || null,
+      explanation: q.explanation || null,
+      number: q.number,
+      // Metadados por questão têm prioridade sobre os do formulário
+      banca: q.banca || undefined,
+      year: q.year || undefined,
+      orgao: q.orgao || undefined,
+      cargo: q.cargo || undefined,
+      textKey: q.textKey ?? undefined,
+    })),
+    texts: Array.isArray(texts) ? texts : [],
+    defaults: { subjectId, assuntoId, banca, year, source, discipline, topic, orgao, cargo, level, isPublic },
+  };
+  return questionBank.bulkCreate(req, res, next);
 };
 
-// ─── GET /question-extract/list ───────────────────────────────────────────────
-const listQuestions = async (req, res, next) => {
-  try {
-    const { subjectId, banca, page = '1', limit = '100' } = req.query;
-    const userId = req.user.id;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+// ─── GET /question-extract/list (legado) ─────────────────────────────────────
+const listQuestions = questionBank.list;
 
-    const where = { userId };
-    if (subjectId) where.subjectId = subjectId;
-    if (banca) where.banca = { contains: banca };
-
-    const [questions, total] = await Promise.all([
-      prisma.question.findMany({
-        where,
-        include: { subject: true },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: parseInt(limit),
-      }),
-      prisma.question.count({ where }),
-    ]);
-
-    return success(res, { questions, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ─── POST /question-extract/:id/answer ───────────────────────────────────────
-const answerQuestion = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { selected, timeSpent } = req.body;
-    const userId = req.user.id;
-
-    const question = await prisma.question.findUnique({ where: { id } });
-    if (!question) return res.status(404).json({ error: 'Questão não encontrada.' });
-
-    const isCorrect = question.answer
-      ? selected.toUpperCase() === question.answer.toUpperCase()
-      : false; // questão sem gabarito — não conta como certa
-
-    await prisma.questionAttempt.create({
-      data: { questionId: id, userId, selected: selected.toUpperCase(), isCorrect, timeSpent: timeSpent || null },
-    });
-
-    if (isCorrect) {
-      await prisma.gamification.updateMany({ where: { userId }, data: { xp: { increment: 5 } } });
-    }
-
-    return success(res, {
-      isCorrect,
-      correctAnswer: question.answer,
-      explanation: question.explanation,
-    });
-  } catch (err) {
-    next(err);
-  }
-};
+// ─── POST /question-extract/:id/answer (legado) ──────────────────────────────
+const answerQuestion = questionBank.answer;
 
 module.exports = { extractPreview, extractConfirm, listQuestions, answerQuestion };

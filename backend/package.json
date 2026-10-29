@@ -9,7 +9,10 @@
     "db:push": "npx prisma db push",
     "db:studio": "npx prisma studio",
     "db:generate": "npx prisma generate",
-    "db:seed": "node prisma/seed.js"
+    "db:seed": "node prisma/seed.js",
+    "make-admin": "node scripts/make-admin.js",
+    "db:seed-questions": "node prisma/seed-questions.js",
+    "db:assuntos": "node scripts/import-assuntos.js"
   },
   "keywords": [],
   "author": "",

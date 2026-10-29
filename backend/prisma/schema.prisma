@@ -10,20 +10,20 @@ datasource db {
 // ─── USUÁRIO ───────────────────────────────────────────────────────────────
 
 model User {
-  id                String    @id @default(uuid())
-  name              String
-  email             String    @unique
-  password          String
-  avatar            String?
-  experienceLevel   ExperienceLevel @default(INICIANTE)
-  learningStyle     LearningStyle   @default(LEITURA)
-  dailyStudyHours   Float     @default(2)
-  examDate          DateTime?
-  examName          String?
-  targetRole        String?
-  isActive          Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id              String          @id @default(uuid())
+  name            String
+  email           String          @unique
+  password        String
+  avatar          String?
+  experienceLevel ExperienceLevel @default(INICIANTE)
+  learningStyle   LearningStyle   @default(LEITURA)
+  dailyStudyHours Float           @default(2)
+  examDate        DateTime?
+  examName        String?
+  targetRole      String?
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   // Relações
   routines              Routine[]
@@ -35,6 +35,23 @@ model User {
   flashcardFolders      FlashcardFolder[]
   questions             Question[]
   questionAttempts      QuestionAttempt[]
+  questionFavorites     QuestionFavorite[]
+  questionComments      QuestionComment[]
+  questionAnnotations   QuestionAnnotation[]
+  notebookFolders       QuestionNotebookFolder[]
+  questionReviews       QuestionReview[]
+  questionTexts         QuestionText[]
+  questionReports       QuestionReport[]
+  commentLikes          QuestionCommentLike[]
+  studyEditais          StudyEdital[]
+  lawHighlights         LawHighlight[]
+  examAttempts          ExamAttempt[]
+  examsCreated          Exam[]
+  studyCycles           StudyCycle[]
+  studyTimeLogs         StudyTimeLog[]
+  subscriptions         Subscription[]
+  orders                Order[]
+  questionNotebooks     QuestionNotebook[]
   notes                 Note[]
   mindMaps              MindMap[]
   errorNotebook         ErrorEntry[]
@@ -56,21 +73,21 @@ model User {
   analysisInsights      AnalysisInsight[]
   // Mentoria
   mentorProfile         Mentor?
-  studentMentorings     Mentoring[]    @relation("StudentMentorings")
-  sentMessages          MentoringMessage[] @relation("SentMessages")
+  studentMentorings     Mentoring[]              @relation("StudentMentorings")
+  sentMessages          MentoringMessage[]       @relation("SentMessages")
   // Edital
   editalImports         EditalImport[]
   // Desafio Diário
   dailyChallenges       DailyChallenge[]
   // Redação / Professor
-  role                  UserRole       @default(STUDENT)
-  essays                Essay[]        @relation("StudentEssays")
-  corrections           EssayCorrection[] @relation("TeacherCorrections")
-  essayComments         EssayComment[] @relation("EssayCommentAuthor")
-  teacherStudents       TeacherStudent[] @relation("TeacherStudents")
-  studentTeachers       TeacherStudent[] @relation("StudentTeachers")
-  sentInvites           TeacherInvite[] @relation("StudentInvites")
-  usedInvites           TeacherInvite[] @relation("TeacherUsedInvites")
+  role                  UserRole                 @default(STUDENT)
+  essays                Essay[]                  @relation("StudentEssays")
+  corrections           EssayCorrection[]        @relation("TeacherCorrections")
+  essayComments         EssayComment[]           @relation("EssayCommentAuthor")
+  teacherStudents       TeacherStudent[]         @relation("TeacherStudents")
+  studentTeachers       TeacherStudent[]         @relation("StudentTeachers")
+  sentInvites           TeacherInvite[]          @relation("StudentInvites")
+  usedInvites           TeacherInvite[]          @relation("TeacherUsedInvites")
   feedbackTemplates     FeedbackTemplate[]
 
   @@map("users")
@@ -79,6 +96,7 @@ model User {
 enum UserRole {
   STUDENT
   TEACHER
+  ADMIN
 }
 
 enum ExperienceLevel {
@@ -97,16 +115,16 @@ enum LearningStyle {
 // ─── ROTINA ────────────────────────────────────────────────────────────────
 
 model Routine {
-  id          String    @id @default(uuid())
-  userId      String
-  dayOfWeek   Int       // 0=Domingo ... 6=Sábado
-  startTime   String    // "08:00"
-  endTime     String    // "12:00"
-  type        RoutineType
-  label       String?
-  createdAt   DateTime  @default(now())
+  id        String      @id @default(uuid())
+  userId    String
+  dayOfWeek Int // 0=Domingo ... 6=Sábado
+  startTime String // "08:00"
+  endTime   String // "12:00"
+  type      RoutineType
+  label     String?
+  createdAt DateTime    @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("routines")
 }
@@ -121,61 +139,61 @@ enum RoutineType {
 // ─── DISCIPLINAS ───────────────────────────────────────────────────────────
 
 model Subject {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   userId      String
   name        String
-  color       String    @default("#1976d2")
+  color       String   @default("#1976d2")
   icon        String?
-  weight      Float     @default(1.0)   // Peso/prioridade no cronograma
-  totalTopics Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  weight      Float    @default(1.0) // Peso/prioridade no cronograma
+  totalTopics Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  modules     Module[]
-  errorEntries ErrorEntry[]
-  questionLogs QuestionLog[]
-  pdfs        PDF[]
-  flashcards  Flashcard[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modules         Module[]
+  errorEntries    ErrorEntry[]
+  questionLogs    QuestionLog[]
+  pdfs            PDF[]
+  flashcards      Flashcard[]
   dailyChallenges DailyChallenge[]
-  questions   Question[]
+  questions       Question[]
 
   @@map("subjects")
 }
 
 model Module {
-  id          String    @id @default(uuid())
-  subjectId   String
-  name        String
-  order       Int       @default(0)
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(uuid())
+  subjectId String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
 
-  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  topics      Topic[]
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topics  Topic[]
 
   @@map("modules")
 }
 
 model Topic {
-  id              String    @id @default(uuid())
-  moduleId        String
-  name            String
-  order           Int       @default(0)
-  difficulty      Difficulty @default(MEDIO)
-  estimatedHours  Float     @default(1)
-  progress        Float     @default(0)   // 0-100%
-  isCompleted     Boolean   @default(false)
-  lastStudiedAt   DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String     @id @default(uuid())
+  moduleId       String
+  name           String
+  order          Int        @default(0)
+  difficulty     Difficulty @default(MEDIO)
+  estimatedHours Float      @default(1)
+  progress       Float      @default(0) // 0-100%
+  isCompleted    Boolean    @default(false)
+  lastStudiedAt  DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  module          Module    @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  studyTasks      StudyTask[]
-  errorEntries    ErrorEntry[]
-  flashcards      Flashcard[]
-  questionLogs    QuestionLog[]
-  pdfs            PDF[]
-  notes           Note[]
+  module       Module        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  studyTasks   StudyTask[]
+  errorEntries ErrorEntry[]
+  flashcards   Flashcard[]
+  questionLogs QuestionLog[]
+  pdfs         PDF[]
+  notes        Note[]
 
   @@map("topics")
 }
@@ -189,18 +207,18 @@ enum Difficulty {
 // ─── PLANO DE ESTUDOS ──────────────────────────────────────────────────────
 
 model StudyPlan {
-  id          String    @id @default(uuid())
-  userId      String
-  name        String
-  startDate   DateTime
-  endDate     DateTime
-  isActive    Boolean   @default(true)
-  status      PlanStatus @default(ATIVO)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String     @id @default(uuid())
+  userId    String
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean    @default(true)
+  status    PlanStatus @default(ATIVO)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tasks       StudyTask[]
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks StudyTask[]
 
   @@map("study_plans")
 }
@@ -213,24 +231,24 @@ enum PlanStatus {
 }
 
 model StudyTask {
-  id              String    @id @default(uuid())
-  studyPlanId     String
-  topicId         String?
-  title           String
-  description     String?
-  scheduledDate   DateTime
-  estimatedMinutes Int      @default(60)
-  actualMinutes   Int?
-  isCompleted     Boolean   @default(false)
-  completedAt     DateTime?
-  order           Int       @default(0)
-  type            TaskType  @default(LEITURA)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id               String    @id @default(uuid())
+  studyPlanId      String
+  topicId          String?
+  title            String
+  description      String?
+  scheduledDate    DateTime
+  estimatedMinutes Int       @default(60)
+  actualMinutes    Int?
+  isCompleted      Boolean   @default(false)
+  completedAt      DateTime?
+  order            Int       @default(0)
+  type             TaskType  @default(LEITURA)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  studyPlan       StudyPlan @relation(fields: [studyPlanId], references: [id], onDelete: Cascade)
-  topic           Topic?    @relation(fields: [topicId], references: [id])
-  focusSessions   FocusSession[]
+  studyPlan     StudyPlan      @relation(fields: [studyPlanId], references: [id], onDelete: Cascade)
+  topic         Topic?         @relation(fields: [topicId], references: [id])
+  focusSessions FocusSession[]
 
   @@map("study_tasks")
 }
@@ -248,15 +266,15 @@ enum TaskType {
 // ─── SESSÃO DE ESTUDOS ─────────────────────────────────────────────────────
 
 model StudySession {
-  id          String    @id @default(uuid())
-  userId      String
-  date        DateTime
+  id           String   @id @default(uuid())
+  userId       String
+  date         DateTime
   totalMinutes Int
-  notes       String?
-  mood        Int?      // 1-5
-  createdAt   DateTime  @default(now())
+  notes        String?
+  mood         Int? // 1-5
+  createdAt    DateTime @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("study_sessions")
 }
@@ -264,20 +282,20 @@ model StudySession {
 // ─── MODO FOCO (POMODORO) ──────────────────────────────────────────────────
 
 model FocusSession {
-  id              String    @id @default(uuid())
-  userId          String
-  studyTaskId     String?
-  technique       FocusTechnique @default(POMODORO)
-  workMinutes     Int       @default(25)
-  breakMinutes    Int       @default(5)
-  cycles          Int       @default(0)
-  totalMinutes    Int       @default(0)
-  status          FocusStatus @default(ATIVO)
-  startedAt       DateTime  @default(now())
-  endedAt         DateTime?
+  id           String         @id @default(uuid())
+  userId       String
+  studyTaskId  String?
+  technique    FocusTechnique @default(POMODORO)
+  workMinutes  Int            @default(25)
+  breakMinutes Int            @default(5)
+  cycles       Int            @default(0)
+  totalMinutes Int            @default(0)
+  status       FocusStatus    @default(ATIVO)
+  startedAt    DateTime       @default(now())
+  endedAt      DateTime?
 
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  studyTask       StudyTask? @relation(fields: [studyTaskId], references: [id])
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studyTask StudyTask? @relation(fields: [studyTaskId], references: [id])
 
   @@map("focus_sessions")
 }
@@ -299,21 +317,21 @@ enum FocusStatus {
 // ─── METAS ─────────────────────────────────────────────────────────────────
 
 model Goal {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   userId      String
   title       String
   type        GoalType
   period      GoalPeriod
   target      Float
-  current     Float     @default(0)
-  unit        String    // "horas", "questões", "tópicos"
+  current     Float      @default(0)
+  unit        String // "horas", "questões", "tópicos"
   startDate   DateTime
   endDate     DateTime
-  isCompleted Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isCompleted Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("goals")
 }
@@ -334,56 +352,56 @@ enum GoalPeriod {
 // ─── FLASHCARDS ────────────────────────────────────────────────────────────
 
 model FlashcardFolder {
-  id          String    @id @default(uuid())
-  userId      String
-  name        String
-  color       String    @default("#6C63FF")
-  icon        String    @default("folder")
-  parentId    String?
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  color     String   @default("#6C63FF")
+  icon      String   @default("folder")
+  parentId  String?
+  createdAt DateTime @default(now())
 
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent      FlashcardFolder? @relation("FolderTree", fields: [parentId], references: [id])
-  children    FlashcardFolder[] @relation("FolderTree")
-  flashcards  Flashcard[]
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent     FlashcardFolder?  @relation("FolderTree", fields: [parentId], references: [id])
+  children   FlashcardFolder[] @relation("FolderTree")
+  flashcards Flashcard[]
 
   @@map("flashcard_folders")
 }
 
 model Flashcard {
-  id              String    @id @default(uuid())
-  userId          String
-  folderId        String?
-  subjectId       String?
-  topicId         String?
-  front           String    @db.Text
-  back            String    @db.Text
-  difficulty      Difficulty @default(MEDIO)
-  nextReviewAt    DateTime  @default(now())
-  interval        Int       @default(1)
-  easeFactor      Float     @default(2.5)
-  repetitions     Int       @default(0)
-  totalReviews    Int       @default(0)
-  correctReviews  Int       @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String     @id @default(uuid())
+  userId         String
+  folderId       String?
+  subjectId      String?
+  topicId        String?
+  front          String     @db.Text
+  back           String     @db.Text
+  difficulty     Difficulty @default(MEDIO)
+  nextReviewAt   DateTime   @default(now())
+  interval       Int        @default(1)
+  easeFactor     Float      @default(2.5)
+  repetitions    Int        @default(0)
+  totalReviews   Int        @default(0)
+  correctReviews Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  folder          FlashcardFolder? @relation(fields: [folderId], references: [id])
-  subject         Subject?         @relation(fields: [subjectId], references: [id])
-  topic           Topic?           @relation(fields: [topicId], references: [id])
-  reviews         FlashcardReview[]
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder  FlashcardFolder?  @relation(fields: [folderId], references: [id])
+  subject Subject?          @relation(fields: [subjectId], references: [id])
+  topic   Topic?            @relation(fields: [topicId], references: [id])
+  reviews FlashcardReview[]
 
   @@map("flashcards")
 }
 
 model FlashcardReview {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   flashcardId String
-  rating      Int       // 0=Errou, 1=Difícil, 2=Ok, 3=Fácil
-  reviewedAt  DateTime  @default(now())
+  rating      Int // 0=Errou, 1=Difícil, 2=Ok, 3=Fácil
+  reviewedAt  DateTime @default(now())
 
-  flashcard   Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  flashcard Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
 
   @@map("flashcard_reviews")
 }
@@ -391,18 +409,18 @@ model FlashcardReview {
 // ─── ANOTAÇÕES ─────────────────────────────────────────────────────────────
 
 model Note {
-  id          String    @id @default(uuid())
-  userId      String
-  topicId     String?
-  title       String
-  content     String    @db.LongText
-  tags        String?   // JSON array
-  isPinned    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String   @id @default(uuid())
+  userId    String
+  topicId   String?
+  title     String
+  content   String   @db.LongText
+  tags      String? // JSON array
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topic       Topic?    @relation(fields: [topicId], references: [id])
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic Topic? @relation(fields: [topicId], references: [id])
 
   @@map("notes")
 }
@@ -410,15 +428,15 @@ model Note {
 // ─── MAPAS MENTAIS ─────────────────────────────────────────────────────────
 
 model MindMap {
-  id          String    @id @default(uuid())
-  userId      String
-  title       String
-  data        Json      // estrutura de nós do mapa mental
-  thumbnail   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  data      Json // estrutura de nós do mapa mental
+  thumbnail String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("mind_maps")
 }
@@ -426,7 +444,7 @@ model MindMap {
 // ─── PDFs ──────────────────────────────────────────────────────────────────
 
 model PDF {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   userId      String
   subjectId   String?
   topicId     String?
@@ -435,12 +453,12 @@ model PDF {
   path        String
   size        Int
   pageCount   Int?
-  currentPage Int       @default(1)
-  createdAt   DateTime  @default(now())
+  currentPage Int      @default(1)
+  createdAt   DateTime @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject     Subject?  @relation(fields: [subjectId], references: [id])
-  topic       Topic?    @relation(fields: [topicId], references: [id])
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [id])
+  topic   Topic?   @relation(fields: [topicId], references: [id])
 
   @@map("pdfs")
 }
@@ -448,44 +466,47 @@ model PDF {
 // ─── CADERNO DE ERROS ──────────────────────────────────────────────────────
 
 model ErrorEntry {
-  id              String    @id @default(uuid())
-  userId          String
-  subjectId       String
-  topicId         String?
-  title           String?
-  questionText    String?   @db.Text
-  description     String    @db.Text
-  correctAnswer   String    @db.Text
-  myAnswer        String?   @db.Text
-  explanation     String?   @db.Text
-  personalNotes   String?   @db.Text
-  source          String?
-  errorType       ErrorType
-  difficulty      Difficulty @default(MEDIO)
-  imageUrl        String?
-  audioUrl        String?
-  audioTranscription String? @db.Text
-  nextReviewAt    DateTime  @default(now())
-  reviewCount     Int       @default(0)
-  isResolved      Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                 String     @id @default(uuid())
+  userId             String
+  questionId         String? // questão do banco que originou o erro (registro automático)
+  subjectId          String
+  topicId            String?
+  title              String?
+  questionText       String?    @db.Text
+  description        String     @db.Text
+  correctAnswer      String     @db.Text
+  myAnswer           String?    @db.Text
+  explanation        String?    @db.Text
+  personalNotes      String?    @db.Text
+  source             String?
+  errorType          ErrorType
+  difficulty         Difficulty @default(MEDIO)
+  imageUrl           String?
+  audioUrl           String?
+  audioTranscription String?    @db.Text
+  nextReviewAt       DateTime   @default(now())
+  reviewCount        Int        @default(0)
+  isResolved         Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject         Subject   @relation(fields: [subjectId], references: [id])
-  topic           Topic?    @relation(fields: [topicId], references: [id])
-  reviews         ErrorReview[]
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject  Subject       @relation(fields: [subjectId], references: [id])
+  topic    Topic?        @relation(fields: [topicId], references: [id])
+  reviews  ErrorReview[]
+  question Question?     @relation(fields: [questionId], references: [id], onDelete: SetNull)
 
+  @@index([userId, questionId])
   @@map("error_entries")
 }
 
 model ErrorReview {
-  id            String    @id @default(uuid())
-  errorEntryId  String
-  result        ReviewResult
-  reviewedAt    DateTime  @default(now())
+  id           String       @id @default(uuid())
+  errorEntryId String
+  result       ReviewResult
+  reviewedAt   DateTime     @default(now())
 
-  errorEntry    ErrorEntry @relation(fields: [errorEntryId], references: [id], onDelete: Cascade)
+  errorEntry ErrorEntry @relation(fields: [errorEntryId], references: [id], onDelete: Cascade)
 
   @@map("error_reviews")
 }
@@ -506,59 +527,225 @@ enum ReviewResult {
 // ─── QUESTÕES ──────────────────────────────────────────────────────────────
 
 model Question {
-  id          String    @id @default(uuid())
-  userId      String
+  id          String       @id @default(uuid())
+  userId      String // autor (admin = banco público; aluno = questão privada)
   subjectId   String?
-  statement   String    @db.Text
-  optionA     String    @db.Text
-  optionB     String    @db.Text
-  optionC     String    @db.Text
-  optionD     String    @db.Text
-  optionE     String?   @db.Text
-  answer      String?   // "A"|"B"|"C"|"D"|"E" — null se sem gabarito
-  explanation String?   @db.Text
+  textId      String? // texto de apoio compartilhado (ex.: "Texto I" de Português)
+  assuntoId   Int? // nó da árvore de matérias/assuntos (qualquer nível)
+  type        QuestionType @default(MULTIPLA_ESCOLHA)
+  statement   String       @db.Text
+  optionA     String?      @db.Text
+  optionB     String?      @db.Text
+  optionC     String?      @db.Text
+  optionD     String?      @db.Text
+  optionE     String?      @db.Text
+  answer      String? // "A".."E" (múltipla escolha) | "C"/"E" (certo/errado) — null se sem gabarito
+  explanation String?      @db.Text
+  discipline  String? // disciplina no banco compartilhado (ex.: Direito Constitucional)
+  topic       String? // assunto
   banca       String?
+  orgao       String?
+  cargo       String?
   year        Int?
-  source      String?   // nome do PDF/livro
-  difficulty  Difficulty @default(MEDIO)
-  createdAt   DateTime  @default(now())
+  level       String? // escolaridade: FUNDAMENTAL | MEDIO | SUPERIOR
+  source      String? // nome do PDF/livro/prova
+  difficulty  Difficulty   @default(MEDIO)
+  isPublic    Boolean      @default(false)
+  isAnnulled  Boolean      @default(false)
+  isOutdated  Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @default(now()) @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject     Subject?  @relation(fields: [subjectId], references: [id])
-  attempts    QuestionAttempt[]
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject       Subject?             @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  attempts      QuestionAttempt[]
+  favorites     QuestionFavorite[]
+  comments      QuestionComment[]
+  annotations   QuestionAnnotation[]
+  notebookItems NotebookQuestion[]
+  text          QuestionText?        @relation(fields: [textId], references: [id], onDelete: SetNull)
+  assunto       Assunto?             @relation(fields: [assuntoId], references: [id], onDelete: SetNull)
+  reports       QuestionReport[]
+  reviews       QuestionReview[]
+  errorEntries  ErrorEntry[]
+  lawLinks      QuestionLawLink[]
+  examItems     ExamQuestion[]
 
+  @@index([isPublic, discipline])
+  @@index([assuntoId])
+  @@index([textId])
+  @@index([userId])
+  @@index([banca])
   @@map("questions")
+}
+
+enum QuestionType {
+  MULTIPLA_ESCOLHA
+  CERTO_ERRADO
 }
 
 model QuestionAttempt {
   id         String   @id @default(uuid())
   questionId String
   userId     String
-  selected   String   // letra escolhida
+  notebookId String? // resolvida dentro de um caderno
+  selected   String // letra escolhida
   isCorrect  Boolean
   timeSpent  Int?
   createdAt  DateTime @default(now())
 
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question          @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notebook QuestionNotebook? @relation(fields: [notebookId], references: [id], onDelete: SetNull)
 
+  @@index([userId, questionId])
+  @@index([notebookId])
   @@map("question_attempts")
 }
 
-model QuestionLog {
-  id          String    @id @default(uuid())
-  userId      String
-  subjectId   String
-  topicId     String?
-  source      String?   // banca, prova, ano
-  isCorrect   Boolean
-  timeSpent   Int?      // segundos
-  notes       String?
-  loggedAt    DateTime  @default(now())
+model QuestionFavorite {
+  id         String   @id @default(uuid())
+  userId     String
+  questionId String
+  createdAt  DateTime @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject     Subject   @relation(fields: [subjectId], references: [id])
-  topic       Topic?    @relation(fields: [topicId], references: [id])
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@map("question_favorites")
+}
+
+// Riscos de caneta/marca-texto do aluno sobre a questão
+model QuestionAnnotation {
+  id         String   @id @default(uuid())
+  userId     String
+  questionId String
+  strokes    Json
+  updatedAt  DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@map("question_annotations")
+}
+
+// ─── CADERNOS DE QUESTÕES ──────────────────────────────────────────────────
+
+model QuestionNotebookFolder {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  color     String   @default("#F2B705")
+  createdAt DateTime @default(now())
+
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notebooks QuestionNotebook[]
+
+  @@index([userId])
+  @@map("question_notebook_folders")
+}
+
+model QuestionNotebook {
+  id          String   @id @default(uuid())
+  userId      String
+  folderId    String?
+  name        String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder   QuestionNotebookFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  items    NotebookQuestion[]
+  attempts QuestionAttempt[]
+
+  @@index([userId, folderId])
+  @@map("question_notebooks")
+}
+
+model NotebookQuestion {
+  id         String   @id @default(uuid())
+  notebookId String
+  questionId String
+  position   Int      @default(0)
+  addedAt    DateTime @default(now())
+
+  notebook QuestionNotebook @relation(fields: [notebookId], references: [id], onDelete: Cascade)
+  question Question         @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([notebookId, questionId])
+  @@map("notebook_questions")
+}
+
+// Revisão espaçada (SM-2) das questões que o aluno errou
+model QuestionReview {
+  id           String    @id @default(uuid())
+  userId       String
+  questionId   String
+  easeFactor   Float     @default(2.5)
+  interval     Int       @default(1) // dias
+  repetitions  Int       @default(0) // acertos seguidos na revisão
+  lapses       Int       @default(0) // quantas vezes errou
+  nextReviewAt DateTime
+  lastReviewAt DateTime?
+  mastered     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([userId, mastered, nextReviewAt])
+  @@map("question_reviews")
+}
+
+model QuestionComment {
+  id         String   @id @default(uuid())
+  userId     String
+  questionId String
+  body       String   @db.Text
+  likesCount Int      @default(0)
+  isPinned   Boolean  @default(false) // "melhor comentário" fixado pela equipe
+  createdAt  DateTime @default(now())
+
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question              @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  likes    QuestionCommentLike[]
+
+  @@index([questionId])
+  @@map("question_comments")
+}
+
+model QuestionCommentLike {
+  id        String   @id @default(uuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  comment QuestionComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@map("question_comment_likes")
+}
+
+model QuestionLog {
+  id        String   @id @default(uuid())
+  userId    String
+  subjectId String
+  topicId   String?
+  source    String? // banca, prova, ano
+  isCorrect Boolean
+  timeSpent Int? // segundos
+  notes     String?
+  loggedAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id])
+  topic   Topic?  @relation(fields: [topicId], references: [id])
 
   @@map("question_logs")
 }
@@ -566,29 +753,29 @@ model QuestionLog {
 // ─── HÁBITOS ───────────────────────────────────────────────────────────────
 
 model Habit {
-  id          String    @id @default(uuid())
+  id          String         @id @default(uuid())
   userId      String
   name        String
   description String?
   frequency   HabitFrequency @default(DIARIO)
-  targetDays  String?   // JSON: [1,2,3,4,5] dias da semana
-  streak      Int       @default(0)
-  bestStreak  Int       @default(0)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
+  targetDays  String? // JSON: [1,2,3,4,5] dias da semana
+  streak      Int            @default(0)
+  bestStreak  Int            @default(0)
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   completions HabitCompletion[]
 
   @@map("habits")
 }
 
 model HabitCompletion {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   habitId     String
-  completedAt DateTime  @default(now())
+  completedAt DateTime @default(now())
 
-  habit       Habit     @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
 
   @@map("habit_completions")
 }
@@ -608,11 +795,11 @@ model Gamification {
   streak      Int       @default(0)
   bestStreak  Int       @default(0)
   totalHours  Float     @default(0)
-  badges      String?   @db.Text  // JSON array de badges conquistados
+  badges      String?   @db.Text // JSON array de badges conquistados
   lastStudyAt DateTime?
   updatedAt   DateTime  @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("gamification")
 }
@@ -620,14 +807,14 @@ model Gamification {
 // ─── EMOÇÕES / ESTADO EMOCIONAL ────────────────────────────────────────────
 
 model EmotionLog {
-  id        String    @id @default(uuid())
-  userId    String
-  emotion   EmotionType
-  energy    Int       // 1-5
-  notes     String?
-  loggedAt  DateTime  @default(now())
+  id       String      @id @default(uuid())
+  userId   String
+  emotion  EmotionType
+  energy   Int // 1-5
+  notes    String?
+  loggedAt DateTime    @default(now())
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("emotion_logs")
 }
@@ -644,16 +831,16 @@ enum EmotionType {
 // ─── NOTIFICAÇÕES ──────────────────────────────────────────────────────────
 
 model Notification {
-  id        String    @id @default(uuid())
+  id        String           @id @default(uuid())
   userId    String
   title     String
   body      String
   type      NotificationType
-  isRead    Boolean   @default(false)
+  isRead    Boolean          @default(false)
   data      Json?
-  createdAt DateTime  @default(now())
+  createdAt DateTime         @default(now())
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
@@ -679,26 +866,26 @@ enum NotificationType {
 // ═══════════════════════════════════════════════════════════════════════════
 
 model BrainProfile {
-  id                  String       @id @default(uuid())
-  userId              String       @unique
-  energyPattern       Json         @default("{}")
-  peakHours           Json         @default("[]")
-  weakSubjects        Json         @default("[]")
-  strongSubjects      Json         @default("[]")
-  behaviorType        BehaviorType @default(INCONSISTENTE)
-  performanceScore    Float        @default(0)
-  retentionRate       Float        @default(0)
-  forgettingIndex     Float        @default(0.5)
-  consistencyScore    Float        @default(0)
-  activeMode          StudyMode    @default(NORMAL)
-  examDate            DateTime?
-  avgSessionMinutes   Float        @default(0)
-  abandonmentRate     Float        @default(0)
-  lastAnalyzedAt      DateTime?
-  updatedAt           DateTime     @updatedAt
-  createdAt           DateTime     @default(now())
+  id                String       @id @default(uuid())
+  userId            String       @unique
+  energyPattern     Json         @default("{}")
+  peakHours         Json         @default("[]")
+  weakSubjects      Json         @default("[]")
+  strongSubjects    Json         @default("[]")
+  behaviorType      BehaviorType @default(INCONSISTENTE)
+  performanceScore  Float        @default(0)
+  retentionRate     Float        @default(0)
+  forgettingIndex   Float        @default(0.5)
+  consistencyScore  Float        @default(0)
+  activeMode        StudyMode    @default(NORMAL)
+  examDate          DateTime?
+  avgSessionMinutes Float        @default(0)
+  abandonmentRate   Float        @default(0)
+  lastAnalyzedAt    DateTime?
+  updatedAt         DateTime     @updatedAt
+  createdAt         DateTime     @default(now())
 
-  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("brain_profiles")
 }
@@ -720,15 +907,15 @@ enum StudyMode {
 }
 
 model BehaviorEvent {
-  id          String            @id @default(uuid())
-  userId      String
-  type        BehaviorEventType
-  subjectId   String?
-  topicId     String?
-  metadata    Json              @default("{}")
-  occurredAt  DateTime          @default(now())
+  id         String            @id @default(uuid())
+  userId     String
+  type       BehaviorEventType
+  subjectId  String?
+  topicId    String?
+  metadata   Json              @default("{}")
+  occurredAt DateTime          @default(now())
 
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, type])
   @@index([userId, occurredAt])
@@ -766,25 +953,25 @@ model EnergyLog {
   performance Float?
   loggedAt    DateTime  @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, hour])
   @@map("energy_logs")
 }
 
 model DailyIntelligencePlan {
-  id              String          @id @default(uuid())
-  userId          String
-  date            DateTime
-  plan            Json
-  replans         Json            @default("[]")
-  status          DailyPlanStatus @default(GERADO)
-  executionScore  Float?
-  dayMode         StudyMode       @default(NORMAL)
-  generatedAt     DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id             String          @id @default(uuid())
+  userId         String
+  date           DateTime
+  plan           Json
+  replans        Json            @default("[]")
+  status         DailyPlanStatus @default(GERADO)
+  executionScore Float?
+  dayMode        StudyMode       @default(NORMAL)
+  generatedAt    DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
   @@map("daily_intelligence_plans")
@@ -815,7 +1002,7 @@ model Mission {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("missions")
 }
@@ -851,7 +1038,7 @@ model BruteForceSession {
   isActive        Boolean   @default(true)
   improvementRate Float?
 
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("brute_force_sessions")
 }
@@ -867,7 +1054,7 @@ model ProcrastinationEvent {
   detectedAt        DateTime            @default(now())
   resolvedAt        DateTime?
 
-  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("procrastination_events")
 }
@@ -894,7 +1081,7 @@ model AnalysisInsight {
   generatedAt DateTime        @default(now())
   expiresAt   DateTime?
 
-  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("analysis_insights")
 }
@@ -923,41 +1110,41 @@ enum InsightSeverity {
 // ═══════════════════════════════════════════════════════════════════════════
 
 model Mentor {
-  id            String     @id @default(uuid())
-  userId        String     @unique
-  bio           String?    @db.Text
-  specialties   Json       @default("[]")
-  rating        Float      @default(0)
-  totalStudents Int        @default(0)
-  totalSessions Int        @default(0)
-  isAvailable   Boolean    @default(true)
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  bio           String?  @db.Text
+  specialties   Json     @default("[]")
+  rating        Float    @default(0)
+  totalStudents Int      @default(0)
+  totalSessions Int      @default(0)
+  isAvailable   Boolean  @default(true)
   pricePerHour  Float?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mentorings    Mentoring[]
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mentorings Mentoring[]
 
   @@map("mentors")
 }
 
 model Mentoring {
-  id          String          @id @default(uuid())
-  studentId   String
-  mentorId    String
-  status      MentoringStatus @default(PENDENTE)
-  goals       Json            @default("[]")
-  notes       String?         @db.Text
-  startedAt   DateTime?
-  endedAt     DateTime?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id        String          @id @default(uuid())
+  studentId String
+  mentorId  String
+  status    MentoringStatus @default(PENDENTE)
+  goals     Json            @default("[]")
+  notes     String?         @db.Text
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 
-  student     User            @relation("StudentMentorings", fields: [studentId], references: [id], onDelete: Cascade)
-  mentor      Mentor          @relation(fields: [mentorId], references: [id], onDelete: Cascade)
-  sessions    MentoringSession[]
-  messages    MentoringMessage[]
-  plans       MentoringWeeklyPlan[]
+  student  User                  @relation("StudentMentorings", fields: [studentId], references: [id], onDelete: Cascade)
+  mentor   Mentor                @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  sessions MentoringSession[]
+  messages MentoringMessage[]
+  plans    MentoringWeeklyPlan[]
 
   @@map("mentorings")
 }
@@ -982,7 +1169,7 @@ model MentoringSession {
   recordingUrl String?
   createdAt    DateTime      @default(now())
 
-  mentoring    Mentoring     @relation(fields: [mentoringId], references: [id], onDelete: Cascade)
+  mentoring Mentoring @relation(fields: [mentoringId], references: [id], onDelete: Cascade)
 
   @@map("mentoring_sessions")
 }
@@ -1004,8 +1191,8 @@ model MentoringMessage {
   isRead      Boolean     @default(false)
   sentAt      DateTime    @default(now())
 
-  mentoring   Mentoring   @relation(fields: [mentoringId], references: [id], onDelete: Cascade)
-  sender      User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  mentoring Mentoring @relation(fields: [mentoringId], references: [id], onDelete: Cascade)
+  sender    User      @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([mentoringId, sentAt])
   @@map("mentoring_messages")
@@ -1019,19 +1206,19 @@ enum MessageType {
 }
 
 model MentoringWeeklyPlan {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   mentoringId String
   weekNumber  Int
   weekStart   DateTime
   weekEnd     DateTime
-  goals       Json      @default("[]")
-  tasks       Json      @default("[]")
-  feedback    String?   @db.Text
+  goals       Json     @default("[]")
+  tasks       Json     @default("[]")
+  feedback    String?  @db.Text
   score       Float?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  mentoring   Mentoring @relation(fields: [mentoringId], references: [id], onDelete: Cascade)
+  mentoring Mentoring @relation(fields: [mentoringId], references: [id], onDelete: Cascade)
 
   @@map("mentoring_weekly_plans")
 }
@@ -1041,21 +1228,21 @@ model MentoringWeeklyPlan {
 // ═══════════════════════════════════════════════════════════════════════════
 
 model EditalImport {
-  id              String        @id @default(uuid())
-  userId          String
-  fileName        String
-  fileUrl         String?
-  contestName     String?
-  year            Int?
-  status          EditalStatus  @default(PROCESSANDO)
-  extractedData   Json          @default("{}")
-  confirmedData   Json?
-  errorMessage    String?
-  processedAt     DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id            String       @id @default(uuid())
+  userId        String
+  fileName      String
+  fileUrl       String?
+  contestName   String?
+  year          Int?
+  status        EditalStatus @default(PROCESSANDO)
+  extractedData Json         @default("{}")
+  confirmedData Json?
+  errorMessage  String?
+  processedAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("edital_imports")
 }
@@ -1085,8 +1272,8 @@ model TeacherInvite {
   teacherId String?
   createdAt DateTime  @default(now())
 
-  student   User      @relation("StudentInvites",     fields: [studentId], references: [id], onDelete: Cascade)
-  teacher   User?     @relation("TeacherUsedInvites", fields: [teacherId], references: [id])
+  student User  @relation("StudentInvites", fields: [studentId], references: [id], onDelete: Cascade)
+  teacher User? @relation("TeacherUsedInvites", fields: [teacherId], references: [id])
 
   @@map("teacher_invites")
 }
@@ -1098,8 +1285,8 @@ model TeacherStudent {
   isActive  Boolean  @default(true)
   linkedAt  DateTime @default(now())
 
-  teacher   User     @relation("TeacherStudents", fields: [teacherId], references: [id], onDelete: Cascade)
-  student   User     @relation("StudentTeachers", fields: [studentId], references: [id], onDelete: Cascade)
+  teacher User @relation("TeacherStudents", fields: [teacherId], references: [id], onDelete: Cascade)
+  student User @relation("StudentTeachers", fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([teacherId, studentId])
   @@map("teacher_students")
@@ -1120,11 +1307,11 @@ model Essay {
   submittedAt DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  student     User             @relation("StudentEssays", fields: [studentId], references: [id], onDelete: Cascade)
+  student     User              @relation("StudentEssays", fields: [studentId], references: [id], onDelete: Cascade)
   corrections EssayCorrection[]
   comments    EssayComment[]
-  parent      Essay?           @relation("EssayVersions", fields: [parentId], references: [id])
-  versions    Essay[]          @relation("EssayVersions")
+  parent      Essay?            @relation("EssayVersions", fields: [parentId], references: [id])
+  versions    Essay[]           @relation("EssayVersions")
 
   @@index([studentId, status])
   @@map("essays")
@@ -1140,27 +1327,27 @@ enum EssayStatus {
 }
 
 model EssayCorrection {
-  id               String    @id @default(uuid())
-  essayId          String    @unique
-  teacherId        String
-  generalFeedback  String?   @db.Text
-  strengthPoints   String?   @db.Text   // pontos positivos
-  improvementPoints String?  @db.Text   // pontos a melhorar
+  id                String    @id @default(uuid())
+  essayId           String    @unique
+  teacherId         String
+  generalFeedback   String?   @db.Text
+  strengthPoints    String?   @db.Text // pontos positivos
+  improvementPoints String?   @db.Text // pontos a melhorar
   // Critérios ENEM (0-200 cada = 0-1000 total)
-  scoreC1          Int?      // Competência 1: Domínio da norma culta
-  scoreC2          Int?      // Competência 2: Compreensão da proposta
-  scoreC3          Int?      // Competência 3: Seleção de argumentos
-  scoreC4          Int?      // Competência 4: Coesão e coerência
-  scoreC5          Int?      // Competência 5: Proposta de intervenção
-  totalScore       Int?      // soma automática 0-1000
-  audioUrl         String?   // áudio gravado pelo professor
-  correctedFileUrl String?   // PDF corrigido
-  pdfAnnotations   String?   @db.LongText  // JSON com rabiscos do professor por página
-  requestRewrite   Boolean   @default(false)
-  rewriteDeadline  DateTime?
-  correctedAt      DateTime  @default(now())
+  scoreC1           Int? // Competência 1: Domínio da norma culta
+  scoreC2           Int? // Competência 2: Compreensão da proposta
+  scoreC3           Int? // Competência 3: Seleção de argumentos
+  scoreC4           Int? // Competência 4: Coesão e coerência
+  scoreC5           Int? // Competência 5: Proposta de intervenção
+  totalScore        Int? // soma automática 0-1000
+  audioUrl          String? // áudio gravado pelo professor
+  correctedFileUrl  String? // PDF corrigido
+  pdfAnnotations    String?   @db.LongText // JSON com rabiscos do professor por página
+  requestRewrite    Boolean   @default(false)
+  rewriteDeadline   DateTime?
+  correctedAt       DateTime  @default(now())
 
-  essay    Essay          @relation(fields: [essayId],   references: [id], onDelete: Cascade)
+  essay    Essay          @relation(fields: [essayId], references: [id], onDelete: Cascade)
   teacher  User           @relation("TeacherCorrections", fields: [teacherId], references: [id])
   comments EssayComment[]
 
@@ -1173,9 +1360,9 @@ model EssayComment {
   correctionId String?
   authorId     String
   text         String      @db.Text
-  selectedText String?     @db.Text   // trecho do texto selecionado
-  startOffset  Int?                   // posição inicial no conteúdo
-  endOffset    Int?                   // posição final
+  selectedText String?     @db.Text // trecho do texto selecionado
+  startOffset  Int? // posição inicial no conteúdo
+  endOffset    Int? // posição final
   type         CommentType @default(ANNOTATION)
   isResolved   Boolean     @default(false)
   createdAt    DateTime    @default(now())
@@ -1189,48 +1376,494 @@ model EssayComment {
 }
 
 enum CommentType {
-  ANNOTATION   // anotação geral
-  GRAMMAR      // erro gramatical
-  COHESION     // coesão/coerência
-  ARGUMENT     // argumentação fraca
-  SUGGESTION   // sugestão de melhoria
-  PRAISE       // elogio / ponto positivo
+  ANNOTATION // anotação geral
+  GRAMMAR // erro gramatical
+  COHESION // coesão/coerência
+  ARGUMENT // argumentação fraca
+  SUGGESTION // sugestão de melhoria
+  PRAISE // elogio / ponto positivo
 }
 
 model FeedbackTemplate {
-  id        String   @id @default(uuid())
-  teacherId String
-  title     String
-  content   String   @db.Text
-  category  String?  // "gramatica", "coesao", "argumento", etc.
-  usageCount Int     @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  teacherId  String
+  title      String
+  content    String   @db.Text
+  category   String? // "gramatica", "coesao", "argumento", etc.
+  usageCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacher User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@map("feedback_templates")
 }
 
 model DailyChallenge {
-  id            String      @id @default(uuid())
+  id            String     @id @default(uuid())
   userId        String
   subjectId     String?
-  question      String      @db.Text
-  options       Json        // ["A. ...", "B. ...", "C. ...", "D. ..."]
-  correctOption String      // "A", "B", "C" ou "D"
-  explanation   String?     @db.Text
-  difficulty    Difficulty  @default(MEDIO)
+  question      String     @db.Text
+  options       Json // ["A. ...", "B. ...", "C. ...", "D. ..."]
+  correctOption String // "A", "B", "C" ou "D"
+  explanation   String?    @db.Text
+  difficulty    Difficulty @default(MEDIO)
   banca         String?
   userAnswer    String?
   isCorrect     Boolean?
   answeredAt    DateTime?
   timeSpent     Int?
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime   @default(now())
 
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject       Subject?    @relation(fields: [subjectId], references: [id])
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [id])
 
   @@index([userId, createdAt])
   @@map("daily_challenges")
+}
+
+// ─── PLANOS, ASSINATURAS E VENDAS ─────────────────────────────────────────
+
+enum BillingPeriod {
+  FREE
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  YEARLY
+  LIFETIME
+}
+
+model Plan {
+  id            String        @id @default(uuid())
+  slug          String        @unique
+  name          String
+  tagline       String?
+  description   String?       @db.Text
+  priceCents    Int           @default(0)
+  billingPeriod BillingPeriod @default(MONTHLY)
+  features      Json // { recurso: true|false|número (limite) }
+  color         String        @default("#F2B705")
+  highlight     Boolean       @default(false) // "mais escolhido"
+  isDefault     Boolean       @default(false) // plano de quem não assinou nada
+  isActive      Boolean       @default(true)
+  sortOrder     Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  subscriptions Subscription[]
+  orders        Order[]
+  promotions    Promotion[]
+
+  @@map("plans")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  EXPIRED
+}
+
+model Subscription {
+  id         String             @id @default(uuid())
+  userId     String
+  planId     String
+  orderId    String?
+  status     SubscriptionStatus @default(ACTIVE)
+  source     String             @default("CHECKOUT") // CHECKOUT | ADMIN
+  startedAt  DateTime           @default(now())
+  expiresAt  DateTime?
+  canceledAt DateTime?
+  createdAt  DateTime           @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([userId, status])
+  @@map("subscriptions")
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+model Coupon {
+  id           String       @id @default(uuid())
+  code         String       @unique
+  description  String?
+  discountType DiscountType @default(PERCENT)
+  value        Int // % (1-100) ou centavos
+  maxUses      Int? // null = ilimitado
+  usedCount    Int          @default(0)
+  perUserLimit Int          @default(1)
+  planIds      Json? // restringe a planos (lista de ids); null = todos
+  validFrom    DateTime?
+  validUntil   DateTime?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+
+  orders Order[]
+
+  @@map("coupons")
+}
+
+model Promotion {
+  id           String       @id @default(uuid())
+  name         String
+  description  String?
+  badge        String? // ex.: "Black Friday"
+  planId       String? // null = todos os planos pagos
+  discountType DiscountType @default(PERCENT)
+  value        Int
+  startsAt     DateTime     @default(now())
+  endsAt       DateTime?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+
+  plan Plan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@map("promotions")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELED
+  REFUNDED
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  userId        String
+  planId        String
+  couponId      String?
+  promotionId   String?
+  originalCents Int
+  discountCents Int         @default(0)
+  finalCents    Int
+  status        OrderStatus @default(PENDING)
+  paymentMethod String? // FREE | MANUAL | (gateway futuro)
+  notes         String?     @db.Text
+  paidAt        DateTime?
+  createdAt     DateTime    @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan   Plan    @relation(fields: [planId], references: [id])
+  coupon Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([userId])
+  @@map("orders")
+}
+
+// Configurações globais editáveis pelo admin (ex.: liberar tudo para todos)
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+// Árvore de matérias e assuntos (matéria › assunto › subassunto..., até 6 níveis).
+// Os ids vêm do arquivo de origem e são estáveis: reimportar atualiza nomes sem perder vínculos.
+model Assunto {
+  id        Int      @id
+  parentId  Int?
+  name      String   @db.VarChar(255)
+  path      String   @db.VarChar(64) // "001.002.001" — ordena e identifica a posição na árvore
+  depth     Int // 1 = matéria
+  createdAt DateTime @default(now())
+
+  parent      Assunto?         @relation("AssuntoTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Assunto[]        @relation("AssuntoTree")
+  questions   Question[]
+  editalItems EditalItem[]
+  laws        Law[]
+  cycleItems  StudyCycleItem[]
+
+  @@index([parentId])
+  @@index([path])
+  @@map("assuntos")
+}
+
+// Texto de apoio compartilhado por várias questões ("Leia o texto para responder às questões 1 a 5")
+model QuestionText {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String? // ex.: "Texto I"
+  body      String   @db.LongText // aceita a marcação de formatação (**negrito**, ==destaque==...)
+  source    String?  @db.Text // autor, obra, veículo
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@index([isPublic])
+  @@map("question_texts")
+}
+
+enum ReportType {
+  ERRO_GABARITO
+  ERRO_ENUNCIADO
+  DESATUALIZADA
+  PEDIDO_ANULACAO
+  CLASSIFICACAO_ERRADA
+  OUTRO
+}
+
+enum ReportStatus {
+  ABERTO
+  EM_ANALISE
+  RESOLVIDO
+  REJEITADO
+}
+
+// Aluno reporta problema na questão; admin analisa e responde
+model QuestionReport {
+  id         String       @id @default(uuid())
+  questionId String
+  userId     String
+  type       ReportType
+  message    String       @db.Text
+  status     ReportStatus @default(ABERTO)
+  adminReply String?      @db.Text
+  resolvedAt DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([questionId])
+  @@map("question_reports")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── EDITAL VERTICALIZADO ───────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Checklist do edital do aluno: cada tópico ligado (quando possível) a um nó da árvore de assuntos
+model StudyEdital {
+  id        String    @id @default(uuid())
+  userId    String
+  name      String
+  banca     String?
+  examDate  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items EditalItem[]
+
+  @@index([userId])
+  @@map("study_editais")
+}
+
+model EditalItem {
+  id            String    @id @default(uuid())
+  editalId      String
+  discipline    String // matéria como escrita no edital
+  label         String    @db.Text // tópico como escrito no edital
+  assuntoId     Int?
+  position      Int       @default(0)
+  studied       Boolean   @default(false) // teoria vista
+  reviews       Int       @default(0) // revisões feitas
+  lastStudiedAt DateTime?
+  notes         String?   @db.Text
+
+  edital  StudyEdital @relation(fields: [editalId], references: [id], onDelete: Cascade)
+  assunto Assunto?    @relation(fields: [assuntoId], references: [id], onDelete: SetNull)
+
+  @@index([editalId, position])
+  @@map("edital_items")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── LEI SECA ───────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Law {
+  id          String   @id @default(uuid())
+  title       String // "Constituição Federal de 1988"
+  shortName   String // "CF/88"
+  aliases     String?  @db.Text // termos que identificam a lei nas questões, separados por "|"
+  description String?  @db.Text
+  assuntoId   Int? // matéria da árvore (restringe a vinculação automática)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assunto  Assunto?     @relation(fields: [assuntoId], references: [id], onDelete: SetNull)
+  articles LawArticle[]
+
+  @@map("laws")
+}
+
+model LawArticle {
+  id       String  @id @default(uuid())
+  lawId    String
+  number   String // "5", "37", "121-A"
+  heading  String? @db.Text // título/capítulo/seção em que está
+  text     String  @db.LongText
+  position Int
+
+  law        Law               @relation(fields: [lawId], references: [id], onDelete: Cascade)
+  questions  QuestionLawLink[]
+  highlights LawHighlight[]
+
+  @@index([lawId, position])
+  @@map("law_articles")
+}
+
+model QuestionLawLink {
+  questionId String
+  articleId  String
+  auto       Boolean  @default(false) // vinculada pela leitura automática do texto
+  createdAt  DateTime @default(now())
+
+  question Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  article  LawArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, articleId])
+  @@index([articleId])
+  @@map("question_law_links")
+}
+
+// Marca-texto e nota do aluno em um artigo
+model LawHighlight {
+  id        String   @id @default(uuid())
+  userId    String
+  articleId String
+  marks     Json // [{ start, end, color }]
+  note      String?  @db.Text
+  updatedAt DateTime @updatedAt
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article LawArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+  @@map("law_highlights")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── SIMULADOS COM RANKING ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Exam {
+  id              String   @id @default(uuid())
+  title           String
+  description     String?  @db.Text
+  banca           String?
+  cargo           String?
+  startsAt        DateTime // a partir de quando o aluno pode começar
+  endsAt          DateTime // último momento para começar
+  durationMinutes Int
+  cutoffScore     Float? // nota de corte (em pontos líquidos)
+  wrongPenalty    Boolean  @default(false) // uma errada anula uma certa (estilo Cebraspe)
+  isPremium       Boolean  @default(false)
+  isPublished     Boolean  @default(false)
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  createdBy User           @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  questions ExamQuestion[]
+  attempts  ExamAttempt[]
+
+  @@index([isPublished, startsAt])
+  @@map("exams")
+}
+
+model ExamQuestion {
+  examId     String
+  questionId String
+  position   Int
+
+  exam     Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@id([examId, questionId])
+  @@map("exam_questions")
+}
+
+model ExamAttempt {
+  id         String    @id @default(uuid())
+  examId     String
+  userId     String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  answers    Json // { questionId: letra }
+  correct    Int       @default(0)
+  wrong      Int       @default(0)
+  blank      Int       @default(0)
+  score      Float     @default(0)
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, userId])
+  @@index([examId, finishedAt])
+  @@map("exam_attempts")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── CICLO DE ESTUDOS ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+model StudyCycle {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  isActive  Boolean  @default(true)
+  round     Int      @default(1) // volta atual do ciclo
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items StudyCycleItem[]
+  logs  StudyTimeLog[]
+
+  @@index([userId])
+  @@map("study_cycles")
+}
+
+model StudyCycleItem {
+  id          String @id @default(uuid())
+  cycleId     String
+  label       String
+  assuntoId   Int?
+  minutes     Int // meta da etapa em cada volta
+  doneMinutes Int    @default(0) // estudado na volta atual
+  position    Int
+  color       String @default("#F2B705")
+
+  cycle   StudyCycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  assunto Assunto?       @relation(fields: [assuntoId], references: [id], onDelete: SetNull)
+  logs    StudyTimeLog[]
+
+  @@index([cycleId, position])
+  @@map("study_cycle_items")
+}
+
+// Horas líquidas registradas pelo cronômetro (ou à mão)
+model StudyTimeLog {
+  id        String   @id @default(uuid())
+  userId    String
+  cycleId   String?
+  itemId    String?
+  label     String
+  minutes   Int
+  startedAt DateTime
+  createdAt DateTime @default(now())
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cycle StudyCycle?     @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  item  StudyCycleItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startedAt])
+  @@map("study_time_logs")
 }

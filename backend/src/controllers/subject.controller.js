@@ -1,6 +1,12 @@
 const prisma = require('../utils/prisma');
 const { success, created, notFound, badRequest } = require('../utils/response');
 
+// Módulos e tópicos não têm userId próprio: a posse vem da disciplina
+const findOwnedModule = (id, userId) =>
+  prisma.module.findFirst({ where: { id, subject: { userId } } });
+const findOwnedTopic = (id, userId) =>
+  prisma.topic.findFirst({ where: { id, module: { subject: { userId } } }, include: { module: true } });
+
 // ─── Disciplinas ───────────────────────────────────────────────────────────
 
 const getSubjects = async (req, res, next) => {
@@ -114,6 +120,8 @@ const updateModule = async (req, res, next) => {
     const { id } = req.params;
     const { name, order } = req.body;
 
+    if (!(await findOwnedModule(id, req.user.id))) return notFound(res, 'Módulo não encontrado');
+
     const module = await prisma.module.update({
       where: { id },
       data: {
@@ -130,6 +138,8 @@ const updateModule = async (req, res, next) => {
 const deleteModule = async (req, res, next) => {
   try {
     const { id } = req.params;
+    if (!(await findOwnedModule(id, req.user.id))) return notFound(res, 'Módulo não encontrado');
+    await prisma.topic.deleteMany({ where: { moduleId: id } });
     await prisma.module.delete({ where: { id } });
     return success(res, null, 'Módulo removido');
   } catch (err) {
@@ -144,6 +154,9 @@ const createTopic = async (req, res, next) => {
     const { moduleId } = req.params;
     const { name, order, difficulty, estimatedHours } = req.body;
 
+    const module = await findOwnedModule(moduleId, req.user.id);
+    if (!module) return notFound(res, 'Módulo não encontrado');
+
     const topic = await prisma.topic.create({
       data: {
         name,
@@ -155,10 +168,6 @@ const createTopic = async (req, res, next) => {
     });
 
     // Atualizar contador de tópicos na disciplina
-    const module = await prisma.module.findUnique({
-      where: { id: moduleId },
-      include: { topics: true },
-    });
     await prisma.subject.update({
       where: { id: module.subjectId },
       data: { totalTopics: { increment: 1 } },
@@ -174,6 +183,8 @@ const updateTopic = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, order, difficulty, estimatedHours, progress, isCompleted } = req.body;
+
+    if (!(await findOwnedTopic(id, req.user.id))) return notFound(res, 'Tópico não encontrado');
 
     const data = {};
     if (name) data.name = name;
@@ -196,7 +207,13 @@ const updateTopic = async (req, res, next) => {
 const deleteTopic = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const owned = await findOwnedTopic(id, req.user.id);
+    if (!owned) return notFound(res, 'Tópico não encontrado');
     await prisma.topic.delete({ where: { id } });
+    await prisma.subject.updateMany({
+      where: { id: owned.module.subjectId, totalTopics: { gt: 0 } },
+      data: { totalTopics: { decrement: 1 } },
+    });
     return success(res, null, 'Tópico removido');
   } catch (err) {
     next(err);

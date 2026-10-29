@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
@@ -34,7 +35,11 @@ async function createSubject(userId, name, weight, modules) {
 async function main() {
   console.log('🌱 Iniciando seed do edital TJCE – C03 Analista Judiciário / Sistemas da Informação...');
 
-  const hash = await bcrypt.hash('TenKauanCleuton123@', 12);
+  // Nunca versionar senha real: defina SEED_PASSWORD no .env antes de rodar o seed
+  if (!process.env.SEED_PASSWORD) {
+    throw new Error('Defina SEED_PASSWORD no .env para rodar o seed.');
+  }
+  const hash = await bcrypt.hash(process.env.SEED_PASSWORD, 12);
 
   const user = await prisma.user.upsert({
     where: { email: 'kauancleuton733@gmail.com' },
